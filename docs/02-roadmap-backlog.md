@@ -3,6 +3,7 @@
 Last updated: 2026-11-05 (B100-B112 added: the trail canvas build, handed off to engineering. Spec: "NODE Trail Canvas: Engineering Handoff" (https://claude.ai/artifact/PZpD8zYX8XxAhXpd4L5RFn); decisions in `25-trail-canvas-work-log.md`; file format in `26-trail-file-format.md`. B71, B72, B80 and B82 notes updated. 2026-11-03: B99 added: merging trails on the canvas parked, see `24-merge-parked.md`. 2026-10-30: B98 added and built: survey card on the new tab page, PR #43. B83-B97 added from the research synthesis, see `22-research-actions.md`. 2026-10-26: B26 done: AI query ideas confirmed on the Mac. B78 added and fixed: tabs switching by themselves, tabs sleeping while away. All open checks done; usability test under way. 2026-10-27: B80 sidebar and CommandBar built; Mac signing works (B46); 0.9.6 released, the first signed Mac release. B47 done: saving and filling passwords, strong passwords, import, show and copy. 0.9.5 released with B47 and B78. Earlier, 2026-10-25: 0.9.2 released, B67-B72. B73-B76 restored: added this morning from the survey as B71-B74 in another chat, lost when this file was synced, and renumbered because B71 and B72 were taken by the tab overview and gestures). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
 
 Docs 22-25 (research actions, trail canvas assumptions, merge parked, canvas work log) live in the NODE Browser project; 26 and the sample trail file are also in this folder.
+Last updated: 2026-10-18 (an hour of browsing on the Mac passed the Phase 2 gate; MCP test items B66-B68; Chromium build started, N01-N07). The editable version (with status dropdowns) is in the review doc: https://claude.ai/code/artifact/b6ec4995-3117-41d0-a3c4-948c16e699fc
 
 ## Roadmap
 
@@ -16,6 +17,7 @@ Each phase ends at a gate that must pass before the next phase starts. No dates 
 | 3. Behaviour shell | Per-site rules, research session, WebContentsView, history and find, AI query ideas | B16-B20, B25 | A new site behaviour can be added by editing a rules file, without code changes | Done. Gate passed in testing (rules edited live) |
 | 4. Desktop release readiness | Installable, stable and easy to set up on macOS and Windows | B26-B50 | NODE is your daily research browser for a week with no blocking bugs | Next |
 | 4.T Trail canvas | The trail canvas becomes the start page and the trail; sidebar-only chrome; share as a file; Replay; zoom ladder to Mosaic and Gallery. Spec: engineering handoff doc | B100-B111 | Four steps, each with a gate in the handoff: (1) launches on the last trail, 200 cards at 60 fps; (2) doc 23 usability tests 1 and 4 run on the real build; (3) export → import round trip and handoff test 5 pass; (4) resume from phone (test 3) | Handed off 2026-11-05 |
+| 4C. Chromium build (alongside 4) | NODE on ungoogled-chromium so Google sign-in works; Electron stays the release build until parity. See `13-chromium-build.md` | N01-N07 | N01-N06 done, Google sign-in works, daily browser for a week with no blocking bugs | Started 2026-10-18: N01 code done, first Mac build next |
 | 5. Mobile app | React Native (Expo) app reusing `core/`; see `06-mobile-plan.md` | M01-M15 | To be set when Phase 5 starts | Planning and groundwork done; build waits for the Phase 4 gate. M01-M02 (try it on a phone) can run now |
 
 ## Backlog
@@ -75,6 +77,12 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 | B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Done (0.9.4) |
 | B50 | 4 | Sync across devices | P3 | L | Not started. Needed by B111 (continue from phone) |
 | B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort. See `08-engine-decision.md` | P1 | L | Decided 2026-10-14: stay on Electron and finish this build; extension dropped (see 08) |
+| B46 | 4 | Code signing (Apple Developer ID, Windows) and automatic updates | P1 | M | Updates and release workflow done; signing waits on certificates (see 09-releasing.md) |
+| B47 | 4 | Passwords and autofill | P2 | L | Not started |
+| B48 | 4 | Chrome Web Store extensions | P2 | L | Not started |
+| B49 | 4 | AI chat across tabs and cited summaries of a research session | P2 | M | Not started |
+| B50 | 4 | Sync across devices | P3 | L | Not started |
+| B51 | 5+ | Decide whether to move NODE from Electron to a Chromium-based browser build (as Brave, Vivaldi and Arc do), which Google sign-in accepts; large effort. See `08-engine-decision.md` | P1 | L | Decided 2026-10-18: build on ungoogled-chromium (option B); Electron stays the release build until parity. Steps N01-N07 in `13-chromium-build.md` (2026-10-14 decision to stay on Electron replaced) |
 | B53 | 4.5 | Agent view: a page's main content as Markdown (`core/markdown.js`), for agents and later for mobile and exports | P1 | S | Done |
 | B54 | 4.5 | Read-only MCP server for AI agents: search, logged-out page reader, shared tabs, research sessions as resources; token, localhost only, hard blocks, rate limits, activity log, stop switch | P1 | M | Done |
 | B55 | 4.5 | Trail: recurring keywords use each page's own topic words (the session weighting hid them) | P1 | S | Done |
@@ -148,6 +156,10 @@ Effort: XS under 1 hour, S half a day, M 1-2 days, L 3+ days. Finding IDs (C1, K
 - Talk (S01-S03): Reddit is winding down its public Data API (no new access after 2026-10-31, RSS ends 2026-11-13, public access ends March 2027). Confirm Talk only builds a Reddit search link and relies on no Reddit API or RSS.
 
 These checks were backlog item B26 (done 2026-10-26). All are done except the Talk check.
+
+## Chromium build backlog
+
+N01-N07 are listed in `13-chromium-build.md`. N01 (base, branding, built-in panel, build scripts) is written; the first full build runs on the Mac.
 
 ## Mobile backlog
 
