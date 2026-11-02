@@ -19,7 +19,8 @@ fs.writeFileSync(path.join(userData, "settings.json"), JSON.stringify({ firstRun
 const saved = path.join(OUT, "Sourdough.trail.md");
 
 (async () => {
-  const app = await electron.launch({ executablePath: require("electron"), args: ["--no-sandbox", `--user-data-dir=${userData}`, path.join(__dirname, "..", "..")] });
+  // No share server here (a closed port): Create Link stays hidden.
+  const app = await electron.launch({ executablePath: require("electron"), args: ["--no-sandbox", `--user-data-dir=${userData}`, path.join(__dirname, "..", "..")], env: { ...process.env, NODE_SHARE_API: "http://127.0.0.1:9" } });
   await app.evaluate(() => {
     const o = globalThis.fetch;
     globalThis.fetch = async (u, opt) => (/wikipedia|duckduckgo|brave\.com/.test(String(u)) ? new Response("{}", { status: 200 }) : o(u, opt));
@@ -40,13 +41,15 @@ const saved = path.join(OUT, "Sourdough.trail.md");
     await s.noteAdd("https://example.com/rye", "Good on enzymes.");
   });
   await ui.evaluate((u) => window.scout.createTab(u), `${BASE}/other.html?n=open`);
-  await sleep(1500);
+  // Wait until the open tab's page is in the trail too (4 pages).
+  for (let i = 0; i < 40 && (await ui.evaluate(async () => (await window.scout.researchGet()).trail.length)) < 4; i++) await sleep(250);
 
   await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.find((m) => m.label === "File").submenu.items.find((i) => i.label === "Share Trail…").click());
   await sleep(1200);
   check("File → Share Trail… opens the sheet in Menu → Trail", (await ui.isVisible("#share-sheet")) && (await ui.isVisible("#trail-pane")));
   check("the summary counts threads, replies and notes, with the name", /1 thread with 2 replies, 1 note/.test(await ui.textContent("#share-summary")) && /Sven/.test(await ui.textContent("#share-summary")), await ui.textContent("#share-summary"));
   check("every page is listed and ticked", (await ui.textContent("#share-pages-count")) === "Pages: 4 of 4", await ui.textContent("#share-pages-count"));
+  check("without the share server, Create Link is hidden and the sheet says so", !(await ui.isVisible("#share-link")) && (await ui.isVisible("#link-off")) && (await ui.isVisible("#share-save")));
   check("open tabs are off by default", !(await ui.isChecked("#share-tabs")) && /\(1\)/.test(await ui.textContent("#share-tabs-label")));
 
   await ui.locator("#share-pages label", { hasText: "Rye and enzymes" }).locator("input").uncheck();

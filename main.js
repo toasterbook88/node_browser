@@ -3761,6 +3761,16 @@ ipcMain.handle("trail:link-create", async (_e, opts = {}) => {
   usage().count("trailsShared");
   return { ok: true, link, id: made.id, expiresAt: made.expiresAt };
 });
+// Whether the share server answers. Until it is set up, the Share sheet
+// hides Create Link and offers Save File only (checked each time it opens).
+ipcMain.handle("trail:link-available", async () => {
+  try {
+    const r = await shareFetch(`${shareApi()}/robots.txt`, {}, 4000);
+    return r.ok && /Disallow/.test(await r.text());
+  } catch (_) {
+    return false;
+  }
+});
 ipcMain.handle("trail:links", () => readShares().map(({ deleteToken, ...rest }) => rest));
 ipcMain.handle("trail:link-copy", (_e, id) => {
   const s = readShares().find((x) => x.id === id);

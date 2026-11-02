@@ -2732,6 +2732,11 @@ async function openShareSheet() {
   document.getElementById("share-tabs").disabled = !p.tabs;
   paintShareCount();
   document.getElementById("link-made").hidden = true;
+  // Create Link only when the share server answers.
+  const linkOn = Boolean(await api.linkAvailable?.());
+  document.getElementById("share-link").hidden = !linkOn;
+  document.getElementById("link-about").hidden = !linkOn;
+  document.getElementById("link-off").hidden = linkOn;
   await paintLinks();
   sheet.hidden = false;
   sheet.scrollIntoView({ block: "nearest" });
