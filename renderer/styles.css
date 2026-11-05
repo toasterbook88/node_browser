@@ -1214,6 +1214,21 @@ body.sb-rail .sb-trail-row .mono { display: inline; font: 11px/1 var(--mono); }
 .cmd-keys { height: 40px; flex: none; box-sizing: border-box; display: flex; align-items: center; gap: 20px; padding: 0 20px; border-top: 1px solid var(--line); font: 12px/16px var(--mono); color: var(--ink-muted); text-transform: uppercase; }
 @media (max-width: 760px) { .cmd-keys span:nth-child(n+4):not(:last-child) { display: none; } }
 
+/* Opened trail file (B109): read only, with the sender's note and Start here. */
+.sb-opened { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.sb-opened[hidden], .sb-opened [hidden] { display: none; }
+.sb-opened-head { display: flex; align-items: center; gap: 8px; }
+.sb-opened-head .sb-label { color: var(--ink); }
+.sb-opened-note { margin: 0; font-size: 14px; line-height: 20px; white-space: pre-wrap; }
+.sb-opened-start { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
+.sb-opened-start:hover { background: var(--surface-raised); }
+.sb-opened-start:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.sb-opened-start .nm { font-size: 14px; }
+.sb-opened .chip { align-self: flex-start; }
+.cv-readonly-msg { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 8px 12px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 14px; pointer-events: none; opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }
+.cv-readonly-msg.on { opacity: 1; transition: opacity var(--motion-base) var(--ease-enter); }
+@media (prefers-reduced-motion: reduce) { .cv-readonly-msg, .cv-readonly-msg.on { transition: none; } }
+
 /* Mosaic group (sidebar): the tiles, above the tabs, while Mosaic is on. */
 .sb-mosaic { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .sb-mosaic[hidden], .sb-tabs-head[hidden] { display: none; }

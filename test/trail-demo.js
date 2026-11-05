@@ -190,6 +190,63 @@ const session = (id, extra) => ({
   ok("saving the same session twice adds no events");
 }
 
+// ---- Opened trail files (B109): read only, Save as new trail ----
+{
+  const fs = require("fs"), path = require("path");
+  const TF = require("../core/trail-file");
+  const text = fs.readFileSync(path.join(__dirname, "..", "docs", "sourdough-starters.trail.md"), "utf8");
+  const parsed = TF.parseTrailMd(text);
+  const store = new TrailStore(memoryStorage(), { now });
+  const mine = store.current().trail.id;
+  const d = store.importFile(parsed, { file: "/x/Sourdough starters.trail.md" });
+  const id = d.trail.id;
+  assert.ok(d.trail.readonly && d.trail.from === "Sven" && d.trail.startHere === "q2" && /Winter is solved/.test(d.trail.note));
+  assert.strictEqual(store.index.current, id, "the opened file becomes the current trail");
+  assert.deepStrictEqual([d.cards.length, d.groups.length, d.lines.length], [parsed.cards.length, parsed.groups.length, parsed.lines.length]);
+  ok("a v2 file comes in read only with its cards, groups, links, note and Start here");
+  const evs = store.events(id);
+  assert.ok(evs.length > 0 && evs.every((e, i) => i === 0 || evs[i - 1].at <= e.at), "events are in time order");
+  assert.ok(evs.every((e) => e.actor === "Sven"), "events are the sender's");
+  assert.ok(evs.some((e) => e.type === "linked") && evs.some((e) => e.type === "grouped"));
+  const tl = store.timeline(id);
+  assert.deepStrictEqual(tl.map((x) => x.device), ["desktop", "phone", "desktop", "desktop"], "today, today on the phone, oct 28, oct 27");
+  assert.deepStrictEqual(tl[0].items.filter((i) => i.timelineOnly).map((i) => i.title), ["Starter smells like nail polish", "Sourdough"], "timeline-only items without an address are kept apart");
+  assert.strictEqual(new Date(tl[0].startAt).getDate(), new Date(parsed.trail.at).getDate(), "\"today\" is the day the file was sent");
+  ok("the sender's timeline comes in as events, in order, marked as theirs (today and yesterday read from the day it was sent)");
+  assert.strictEqual(store.importFile(parsed).trail.id, id);
+  assert.strictEqual(store.ids().length, 2);
+  ok("opening the same file again goes back to the same trail");
+  const c = d.cards.find((k) => k.kind === "page");
+  const before = JSON.stringify(store.get(id).cards);
+  const nEv = store.events(id).length;
+  assert.strictEqual(store.moveCard(id, c.id, 1, 1), null);
+  assert.strictEqual(store.removeCard(id, c.id), null);
+  assert.strictEqual(store.placePage(id, "https://example.com/new", { title: "New" }), null);
+  assert.strictEqual(store.searchCard(id, { query: "rye", url: "https://duckduckgo.com/?q=rye" }), null);
+  assert.strictEqual(store.bounce(id, "https://example.com/quick", 3000), null);
+  const research = new ResearchStore(sessionStorageOver(store));
+  research.switchTo(id);
+  research.visit("https://example.com/later", "Later", []);
+  research.rename("Mine now");
+  research.saveNow();
+  assert.strictEqual(JSON.stringify(store.get(id).cards), before);
+  assert.strictEqual(store.events(id).length, nEv);
+  assert.strictEqual(store.get(id).trail.name, "Sourdough starters");
+  ok("moving, removing, placing, search cards, bounces, visits and renames leave it unchanged");
+  const copy = store.saveAsNew(id);
+  assert.ok(copy && !copy.trail.readonly && copy.trail.name === "Sourdough starters · Sven" && copy.trail.id !== id);
+  assert.strictEqual(copy.cards.length, d.cards.length);
+  assert.strictEqual(store.events(copy.trail.id).length, nEv);
+  assert.ok(store.moveCard(copy.trail.id, c.id, 5, 5));
+  assert.strictEqual(store.get(id).cards.find((k) => k.id === c.id).x, c.x, "the opened file does not move");
+  assert.ok(store.has(mine));
+  ok("Save as new trail makes an editable copy with the same cards and history");
+  const out = TF.toTrailMd(store.snapshot(id), { by: parsed.trail.by, at: parsed.trail.at, note: d.trail.note, startHere: d.trail.startHere });
+  const body = (t) => t.split("\n## Timeline")[0].replace(/^id: .*$/m, "");
+  assert.strictEqual(body(out), body(text));
+  ok("an opened file writes back out with the same cards, groups and links");
+}
+
 // ---- 200 cards stay fast ----
 {
   const store = new TrailStore(memoryStorage(), { now });

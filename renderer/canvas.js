@@ -283,7 +283,11 @@
       const rm = h("button", "cv-selbar-btn quiet", "Remove from canvas");
       rm.type = "button";
       rm.addEventListener("click", () => this.selected && this.hooks.remove?.(this.selected));
+      this.selRemove = rm;
       this.selBar.append(this.selMeta, openB, rm);
+      // Opened trail files are read only (B109): trying to change one says so.
+      this.roMsg = h("div", "cv-readonly-msg", "Read only. Save as new trail to change it.");
+      this.roMsg.setAttribute("role", "status");
       // Tools (B105), bottom centre: Select V, Hand H, Group G, Link L, Question Q, Note N.
       this.tool = "select";
       this.multi = new Set();
@@ -357,7 +361,11 @@
           if (e.shiftKey) return this.toggleMulti(id);
           this.clearMulti();
           this.select(id);
-          if (this.readonly) return;
+          if (this.readonly) {
+            drag = { mode: "ro", sx: e.clientX, sy: e.clientY, moved: false };
+            vp.setPointerCapture(e.pointerId);
+            return;
+          }
           const c = this.data.cards.find((k) => k.id === id);
           drag = { mode: "card", id, sx: e.clientX, sy: e.clientY, cx: c.x, cy: c.y, el: card, moved: false };
         } else if (tool === "group") {
@@ -377,7 +385,10 @@
         if (!drag) return;
         const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
         if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
-        if (drag.mode === "pan") this.setView({ x: drag.x + dx, y: drag.y + dy, z: this.v.z });
+        if (drag.mode === "ro" && drag.moved && !drag.said) {
+          drag.said = true;
+          this.sayReadonly();
+        } else if (drag.mode === "pan") this.setView({ x: drag.x + dx, y: drag.y + dy, z: this.v.z });
         else if (drag.mode === "card" && drag.moved) drag.el.style.transform = `translate(${drag.cx + dx / this.v.z}px, ${drag.cy + dy / this.v.z}px)`;
         else if (drag.mode === "group" && drag.moved) drag.el.style.transform = `translate(${drag.gx + dx / this.v.z}px, ${drag.gy + dy / this.v.z}px)`;
         else if (drag.mode === "box") {
@@ -441,6 +452,7 @@
         const url = e.dataTransfer.getData("text/node-url");
         if (!url) return;
         e.preventDefault();
+        if (this.readonly) return this.sayReadonly();
         const r = vp.getBoundingClientRect();
         const wx = (e.clientX - r.left - this.v.x) / this.v.z, wy = (e.clientY - r.top - this.v.y) / this.v.z;
         this.hooks.put?.({ url, x: wx - 130, y: wy - 100 });
@@ -505,6 +517,8 @@
       // Tools are off for opened files (read-only trails) (B105).
       this.readonly = Boolean(snap?.trail?.readonly);
       this.toolsEl.hidden = this.readonly;
+      this.selRemove.hidden = this.readonly;
+      this.el.classList.toggle("readonly", this.readonly);
       this.setTool("select");
       this.multi.clear();
       this.paintMulti();
@@ -931,6 +945,7 @@
       const r = this.dropRows?.[i];
       if (!v || !r) return;
       this.clearSearch();
+      if (this.readonly && r.act !== "private") return this.sayReadonly();
       if (r.act === "open") this.hooks.search?.(v);
       else if (r.act === "search") this.hooks.webSearch?.(v);
       else if (r.act === "ask") this.hooks.ask?.(v);
@@ -981,6 +996,12 @@
       this.paintSelBar();
     }
 
+    sayReadonly() {
+      if (!this.roMsg.isConnected) this.el.append(this.roMsg);
+      this.roMsg.classList.add("on");
+      clearTimeout(this.roTimer);
+      this.roTimer = setTimeout(() => this.roMsg.classList.remove("on"), 2400);
+    }
     paintSelBar() {
       const c = this.selected && this.data?.cards.find((k) => k.id === this.selected);
       this.selBar.hidden = !c;

@@ -163,6 +163,102 @@ class TrailStore {
     return data;
   }
 
+  // ---- trail files (B109, node-trail v2) ----
+  // An opened file becomes its own read-only trail: its cards, groups and
+  // lines as sent, and an event log rebuilt from the file's timeline so the
+  // trail can be replayed (B110). The same file opened again opens the same
+  // trail. parsed: core/trail-file.js parseTrailMd(). Returns the trail data.
+  importFile(parsed, { file = "", at = this.now(), current = true } = {}) {
+    const p = parsed;
+    const id = hashId("f", p.trail.id || p.trail.name, p.trail.by || "", p.trail.at || "");
+    if (this.has(id)) {
+      if (current) this.switchTo(id);
+      return this.get(id);
+    }
+    const data = this.create(p.trail.name, { at, id, current });
+    Object.assign(data.trail, { readonly: true, from: p.trail.by || "", file, note: p.trail.note || "", startHere: p.trail.startHere || "" });
+    data.cards = p.cards.map((c) => ({ ...c }));
+    data.groups = p.groups.map((g) => ({ ...g }));
+    data.lines = p.lines.map((l) => ({ ...l }));
+    // Events, oldest first: the timeline's items at their times (on the day
+    // and year the file was exported in), then the links and groups once
+    // their cards are there. Cards the timeline does not mention come first.
+    const sent = Date.parse(p.trail.at) || at;
+    const year = new Date(sent).getFullYear();
+    const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    // Day labels: "today" and "yesterday" (from the day the file was
+    // exported) or "oct 27".
+    const when = (label, hm) => {
+      const [h, min] = String(hm).split(":").map(Number);
+      if (!(h >= 0) || !(min >= 0)) return null;
+      const rel = { today: 0, yesterday: 1 }[String(label).trim().toLowerCase()];
+      if (rel !== undefined) {
+        const day = new Date(sent);
+        return new Date(day.getFullYear(), day.getMonth(), day.getDate() - rel, h, min).getTime();
+      }
+      const m = String(label).match(/^([a-z]{3})\s+(\d{1,2})$/i);
+      if (!m || MONTHS.indexOf(m[1].toLowerCase()) < 0) return null;
+      let d = new Date(year, MONTHS.indexOf(m[1].toLowerCase()), Number(m[2]), h, min);
+      if (d.getTime() > sent + 86400000) d = new Date(year - 1, d.getMonth(), d.getDate(), h, min);
+      return d.getTime();
+    };
+    const actor = p.trail.by || "sender";
+    const steps = [];
+    for (const sess of p.timeline || []) {
+      for (const it of sess.items || []) {
+        const t = when(sess.label, it.time);
+        if (t === null) continue;
+        steps.push({ at: t, card: it.card || null, title: it.title, device: sess.device || "desktop" });
+      }
+    }
+    steps.sort((a, b) => a.at - b.at);
+    const first = steps.length ? steps[0].at : sent;
+    const seen = new Map();
+    const cardEvent = { page: "opened", video: "opened", search: "placed", capture: "captured", report: "reported", question: "asked", note: "noted", voice: "noted" };
+    const known = new Set(steps.map((s) => s.card).filter(Boolean));
+    let k = 0;
+    for (const c of data.cards.filter((c) => !known.has(c.id))) {
+      const t = first - 60000 + k++;
+      seen.set(c.id, t);
+      this.event(id, { type: "placed", card: c.id, at: t, actor, data: { url: c.url, title: c.title } });
+    }
+    for (const st of steps) {
+      const c = st.card && data.cards.find((x) => x.id === st.card);
+      if (c && !seen.has(c.id)) {
+        seen.set(c.id, st.at);
+        this.event(id, { type: cardEvent[c.kind] || "placed", card: c.id, at: st.at, device: st.device, actor, data: { url: c.url, title: c.title } });
+      } else if (!c) this.event(id, { type: "opened", at: st.at, device: st.device, actor, data: { title: st.title, fromFile: true } });
+    }
+    for (const l of data.lines) this.event(id, { type: "linked", line: l.id, actor, at: Math.max(seen.get(l.from) ?? first, seen.get(l.to) ?? first) + 1, data: { from: l.from, to: l.to, kind: l.kind, label: l.label } });
+    for (const g of data.groups) {
+      const inside = this.cardsIn(id, g).map((c) => seen.get(c.id) ?? first);
+      this.event(id, { type: "grouped", group: g.id, actor, at: (inside.length ? Math.max(...inside) : first) + 2, data: { label: g.label } });
+    }
+    const t = this.load(id);
+    t.events.sort((a, b) => a.at - b.at);
+    this.storage.write(`${id}/events.jsonl`, t.events.map((e) => JSON.stringify(e)).join("\n") + (t.events.length ? "\n" : ""));
+    data.trail.lastAt = sent;
+    this.save(id);
+    return data;
+  }
+  // Save as new trail: an editable copy, "<name> · <sender>". The opened
+  // file's trail stays as it was.
+  saveAsNew(id, { at = this.now() } = {}) {
+    const t = this.load(id);
+    if (!t) return null;
+    const name = t.data.trail.from ? `${t.data.trail.name} · ${t.data.trail.from}` : t.data.trail.name;
+    const copy = this.create(name, { at });
+    const cid = copy.trail.id;
+    Object.assign(copy.trail, { from: t.data.trail.from || "", note: t.data.trail.note || "", startHere: t.data.trail.startHere || "" });
+    copy.cards = JSON.parse(JSON.stringify(t.data.cards));
+    copy.groups = JSON.parse(JSON.stringify(t.data.groups));
+    copy.lines = JSON.parse(JSON.stringify(t.data.lines));
+    for (const e of t.events) this.event(cid, { ...e, id: undefined });
+    this.setView(cid, t.view);
+    this.save(cid);
+    return copy;
+  }
+
   // The trail NODE opens on: the last one used. A first launch gets a new one.
   current() {
     if (this.index.current && this.has(this.index.current) && this.get(this.index.current)) return this.get(this.index.current);
@@ -205,6 +301,10 @@ class TrailStore {
           createdAt: trail.createdAt,
           lastAt: trail.lastAt,
           readonly: trail.readonly,
+          from: trail.from || "",
+          note: trail.note || "",
+          startHere: trail.startHere || "",
+          startTitle: (trail.startHere && t.data.cards.find((c) => c.id === trail.startHere && !c.removed)?.title) || "",
           cards: t.data.cards.filter((c) => !c.removed).length,
           pages: this.pageRows(id).length,
           current: id === this.index.current,
@@ -282,7 +382,7 @@ class TrailStore {
   // Removing keeps the card's events and lines; putting it back restores them.
   removeCard(id, cardId, { at = this.now() } = {}) {
     const c = this.card(id, cardId);
-    if (!c || c.removed) return null;
+    if (!c || c.removed || this.get(id).trail.readonly) return null;
     c.removed = true;
     this.event(id, { type: "removed", card: cardId, at });
     this.save(id);
@@ -290,7 +390,7 @@ class TrailStore {
   }
   restoreCard(id, cardId, { at = this.now(), x, y } = {}) {
     const c = this.card(id, cardId);
-    if (!c || !c.removed) return null;
+    if (!c || !c.removed || this.get(id).trail.readonly) return null;
     delete c.removed;
     if (typeof x === "number") c.x = x;
     if (typeof y === "number") c.y = y;
@@ -307,7 +407,7 @@ class TrailStore {
   // capture, link, ask, tab-open, put). Returns the card, or null.
   placePage(id, url, { title = "", keywords = [], from = "", near, reason = "", at = this.now(), x, y } = {}) {
     const d = this.get(id);
-    if (!d || !url || isSensitiveUrl(url) || !isReading(url)) return null;
+    if (!d || d.trail.readonly || !url || isSensitiveUrl(url) || !isReading(url)) return null;
     const have = this.pageCard(id, url);
     if (have && !have.removed) return have;
     if (have) return this.restoreCard(id, have.id, { at, x, y });
@@ -338,7 +438,7 @@ class TrailStore {
   searchCard(id, { query, url, near, at = this.now() } = {}) {
     const d = this.get(id);
     const q = String(query || "").trim().slice(0, 200);
-    if (!d || !q || !url) return null;
+    if (!d || d.trail.readonly || !q || !url) return null;
     const have = d.cards.find((c) => c.kind === "search" && c.url === url && !c.removed);
     if (have) return have;
     const [w, h] = SIZE.search;
@@ -359,7 +459,7 @@ class TrailStore {
   // A visit that ended without the page becoming a card: kept in the timeline
   // as "timeline only" with its time on page (ms).
   bounce(id, url, dwell, { at = this.now() } = {}) {
-    if (!url || !isReading(url) || !this.get(id) || this.pageCard(id, url)) return null;
+    if (!url || !isReading(url) || !this.get(id) || this.get(id).trail.readonly || this.pageCard(id, url)) return null;
     return this.event(id, { type: "bounced", at, data: { url, dwell: Math.round(dwell) } });
   }
 
@@ -553,7 +653,8 @@ class TrailStore {
       item.title = (card && (card.title || card.text || card.quote)) || e.data?.title || url || e.type;
       if (e.type === "opened") {
         // An opened page shows once per session, at its latest time.
-        const prev = s.items.find((i) => i.type === "opened" && i.url === url);
+        // Items from an opened file have a title and no address.
+        const prev = s.items.find((i) => i.type === "opened" && (url ? i.url === url : !i.url && i.title === (e.data?.title || "")));
         if (prev) s.items.splice(s.items.indexOf(prev), 1);
         item.timelineOnly = !card || Boolean(card.removed);
         if (card?.removed) item.removedFromCanvas = true;
@@ -636,6 +737,9 @@ class TrailStore {
     let id = session.id;
     if (!this.get(id)) this.create(session.name, { at: session.started || this.now(), id, current: false });
     const d = this.get(id);
+    // An opened file (B109) is read only: pages read and renames made while
+    // it is shown are not written into it.
+    if (d.trail.readonly) return d;
     const now = this.now();
     if (session.name && session.name !== d.trail.name) {
       d.trail.name = String(session.name).slice(0, 120);

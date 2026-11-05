@@ -2985,7 +2985,8 @@ document.getElementById("shared-cancel").addEventListener("click", () => {
   document.getElementById("shared-sheet").hidden = true;
 });
 
-// A .trail.md file dropped on the tab bar, sidebar or Menu opens the preview.
+// A .trail.md file dropped anywhere in the window (canvas, sidebar, Menu)
+// opens it: a v2 file as a read-only trail (B109), a v1 file in the preview.
 document.addEventListener("dragover", (e) => {
   if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === "file")) {
     e.preventDefault();
@@ -3102,6 +3103,11 @@ if (api) {
       omni.select();
     } else if (msg.cmd === "bookmark-toggle") {
       toggleBookmark();
+    } else if (msg.cmd === "trail-opened") {
+      // B109: an opened trail file. Its canvas is showing; the sidebar shows
+      // the sender's note and Start here.
+      refreshSideTrails(true);
+      refreshCanvasData();
     } else if (msg.cmd === "shared-trail") {
       showSharedTrail(msg.payload);
     } else if (msg.cmd === "share-trail") {
@@ -4416,6 +4422,34 @@ function monogram(text, url = "") {
   return (words.length > 1 ? words[0][0] + words[1][0] : words[0][0]).toUpperCase();
 }
 
+// B109: the sidebar block for an opened trail file. Read only, who sent it,
+// their note, and Start here (selects that card on the canvas).
+function paintOpened(cur) {
+  const box = document.getElementById("sb-opened");
+  if (!box) return;
+  box.hidden = !cur?.readonly;
+  if (box.hidden) return;
+  document.getElementById("sb-opened-from").textContent = cur.from ? `from ${cur.from}` : "";
+  const note = document.getElementById("sb-opened-note");
+  note.textContent = cur.note || "";
+  note.hidden = !cur.note;
+  const start = document.getElementById("sb-opened-start");
+  start.hidden = !cur.startTitle;
+  document.getElementById("sb-opened-start-name").textContent = cur.startTitle || "";
+}
+document.getElementById("sb-opened-start")?.addEventListener("click", async () => {
+  const cur = sideTrails.find((t) => t.current);
+  if (!cur?.startHere) return;
+  if (!canvasShown) await api.canvasShow?.();
+  trailCanvas?.select(cur.startHere, { reveal: true });
+});
+document.getElementById("sb-opened-save")?.addEventListener("click", async () => {
+  const snap = await api.trailSaveAsNew?.();
+  if (!snap) return;
+  await refreshSideTrails(true);
+  if (typeof adoptSession === "function" && api.researchGet) adoptSession(await api.researchGet());
+  refreshCanvasData();
+});
 async function refreshSideTrails(force = false) {
   if (!api?.trailList || (!force && Date.now() - sideTrailsAt < 2000)) return;
   sideTrailsAt = Date.now();
@@ -4638,6 +4672,7 @@ function paintSide(fetch = true) {
     d.addEventListener("click", () => !t.current && goTrail(t.id));
     dots.appendChild(d);
   }
+  paintOpened(cur);
   document.getElementById("sb-tabs-count").textContent = tabs.length ? String(tabs.length) : "";
   // Mosaic group: the tiles, above the tabs, while Mosaic is on (not in the rail).
   const group = document.getElementById("sb-mosaic");

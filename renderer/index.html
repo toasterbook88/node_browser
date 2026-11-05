@@ -66,6 +66,13 @@
         <div class="sb-dots" id="sb-dots" role="tablist" aria-label="Trails"></div>
         <div class="sb-switch-menu" id="sb-switch-menu" role="menu" aria-label="Trails" hidden></div>
       </div>
+      <!-- B109: an opened trail file. Read only, with the sender's note and Start here. -->
+      <section class="sb-opened" id="sb-opened" aria-labelledby="sb-opened-title" hidden>
+        <div class="sb-opened-head"><span class="sb-label" id="sb-opened-title">Read only</span><span class="sb-meta" id="sb-opened-from"></span></div>
+        <p class="sb-opened-note" id="sb-opened-note" hidden></p>
+        <button type="button" class="sb-opened-start" id="sb-opened-start" hidden><span class="sb-label">Start here</span><span class="nm" id="sb-opened-start-name"></span></button>
+        <button type="button" class="chip" id="sb-opened-save">Save as new trail</button>
+      </section>
       <div class="sb-addr-row">
         <span class="sb-slot sb-nav" data-slot="nav"></span>
         <span class="sb-grow"></span>

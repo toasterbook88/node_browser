@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld("scout", {
   // Trail store (B100)
   trailGet: (id) => ipcRenderer.invoke("trail:get", id),
   trailList: () => ipcRenderer.invoke("trail:list"),
+  trailSaveAsNew: () => ipcRenderer.invoke("trail:save-as-new"),
   trailNew: (name) => ipcRenderer.invoke("trail:new", name),
   trailSwitch: (id) => ipcRenderer.invoke("trail:switch", id),
   trailRename: (name) => ipcRenderer.invoke("trail:rename", name),
