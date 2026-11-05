@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld("scout", {
   sharedClose: () => ipcRenderer.invoke("trail:shared-close"),
   linkCreate: (opts) => ipcRenderer.invoke("trail:link-create", opts),
   linksList: () => ipcRenderer.invoke("trail:links"),
+  linkAvailable: () => ipcRenderer.invoke("trail:link-available"),
   linkCopy: (id) => ipcRenderer.invoke("trail:link-copy", id),
   linkRemove: (id) => ipcRenderer.invoke("trail:link-remove", id),
   linkOpen: (text) => ipcRenderer.invoke("trail:link-open", text),
