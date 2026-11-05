@@ -333,6 +333,23 @@
           </div>
           <div class="share-sheet" id="share-sheet" hidden>
             <p class="kicker sub">Share trail</p>
+            <!-- The trail as a file (B108, node-trail v2): a note, Start here,
+                 what goes in, a preview. -->
+            <label class="field"><span>Note for the reader</span><input type="text" id="share-note" maxlength="300" placeholder="What you found, what you are stuck on" /></label>
+            <label class="field"><span>Start here</span><select id="share-start"></select></label>
+            <p class="kicker sub">In the file</p>
+            <p class="help" id="share-always"></p>
+            <label class="toggle"><input type="checkbox" id="share-timeline" checked /> <span id="share-timeline-label">Timeline</span></label>
+            <label class="toggle"><input type="checkbox" id="share-tabs" /> <span id="share-tabs-label">Open tabs</span></label>
+            <p class="help">Never in the file: screenshots (they stay on this computer), sign-in, account and payment pages, private parts of addresses and tracking codes, private tabs and other trails.</p>
+            <details class="share-preview"><summary>Preview the file</summary><pre id="share-preview-text"></pre></details>
+            <div class="actions-row">
+              <button class="chip" id="share-save">Save File…</button>
+              <button class="chip ghost" id="share-cancel">Cancel</button>
+            </div>
+            <p class="help" id="share-msg" role="status"></p>
+            <div id="share-link-box">
+            <p class="kicker sub">Share link</p>
             <p class="help" id="share-summary"></p>
             <div class="share-pages-head">
               <span id="share-pages-count"></span>
@@ -341,12 +358,10 @@
             </div>
             <ul class="share-pages" id="share-pages"></ul>
             <label class="toggle"><input type="checkbox" id="share-reports" checked /> <span id="share-reports-label">Research reports</span></label>
-            <label class="toggle"><input type="checkbox" id="share-tabs" /> <span id="share-tabs-label">Open tabs</span></label>
+            <label class="toggle"><input type="checkbox" id="share-link-tabs" /> <span id="share-link-tabs-label">Open tabs</span></label>
             <p class="help">Never shared: sign-in, account and payment pages, private parts of addresses (tokens, keys, session codes), tracking codes, and anything outside this trail. Screenshots and saved pages are not included.</p>
             <div class="actions-row">
               <button class="chip" id="share-link">Create Link</button>
-              <button class="chip" id="share-save">Save File…</button>
-              <button class="chip ghost" id="share-cancel">Cancel</button>
             </div>
             <div class="link-made" id="link-made" hidden>
               <div class="link-row"><input id="link-text" type="text" readonly spellcheck="false" /><button class="chip" id="link-copy">Copy</button></div>
@@ -354,7 +369,7 @@
             </div>
             <p class="help" id="link-off" hidden>Share links are not available yet. Save File works now: send the file with any app.</p>
             <p class="help" id="link-about">A link works for 30 days. The trail is encrypted on this computer before it is uploaded, and the key is only in the link, so the NODE share server cannot read it. Anyone you give the link to can read the trail, in NODE or in a web browser.</p>
-            <p class="help" id="share-msg" role="status"></p>
+            </div>
             <div id="links-box" hidden>
               <p class="kicker sub">Your shared links</p>
               <ul class="share-pages" id="links-list"></ul>
