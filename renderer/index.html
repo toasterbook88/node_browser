@@ -92,6 +92,18 @@
         <div class="sb-tabs-head"><span class="sb-label" id="sb-timeline-title">Timeline</span><span class="sb-meta" id="sb-timeline-count"></span></div>
         <div class="sb-timeline-list" id="sb-timeline-list"></div>
       </section>
+      <!-- B110: the Replay list. It takes the timeline's place during Replay. -->
+      <section class="sb-replay" id="sb-replay" aria-labelledby="sb-replay-title" hidden>
+        <div class="sb-tabs-head"><span class="sb-label" id="sb-replay-title">Replay</span><span class="sb-grow"></span><button type="button" class="chip" id="sb-replay-end">End</button></div>
+        <div class="sb-replay-bar" aria-hidden="true"><span id="sb-replay-progress"></span></div>
+        <div class="sb-replay-ctl">
+          <button type="button" class="chip" id="sb-replay-prev" aria-label="Previous step" title="Previous step (←)">←</button>
+          <button type="button" class="chip" id="sb-replay-play" aria-label="Play" title="Play or pause (Space)">Play</button>
+          <button type="button" class="chip" id="sb-replay-next" aria-label="Next step" title="Next step (→)">→</button>
+          <span class="sb-meta" id="sb-replay-count" aria-live="polite"></span>
+        </div>
+        <div class="sb-replay-list" id="sb-replay-list" role="list"></div>
+      </section>
       <div class="sb-tools sb-slot" data-slot="tools" role="toolbar" aria-label="Tools"></div>
       <div class="sb-media" id="sb-media" role="status"><span class="dot" aria-hidden="true"></span><span id="sb-playing"></span><span class="sb-grow"></span><span id="sb-sound"></span></div>
     </nav>

@@ -3105,9 +3105,10 @@ if (api) {
       toggleBookmark();
     } else if (msg.cmd === "trail-opened") {
       // B109: an opened trail file. Its canvas is showing; the sidebar shows
-      // the sender's note and Start here.
+      // the sender's note and Start here. It starts on Replay step 1 (B110).
       refreshSideTrails(true);
       refreshCanvasData();
+      replayWhenShown(msg.payload?.trail?.id);
     } else if (msg.cmd === "shared-trail") {
       showSharedTrail(msg.payload);
     } else if (msg.cmd === "share-trail") {
@@ -3873,6 +3874,10 @@ async function openCanvas({ focus = false, select = "" } = {}) {
     webSearch: (q) => api.trailSearch(q),
     privateSearch: (q) => api.trailSearch(q, { private: true }),
     ask: (q) => askAboutTrail(q),
+    // B110: Replay and Share, top right.
+    replay: () => startTrailReplay(0),
+    share: () => openShareSheet(),
+    replayChanged: (state) => paintReplayList(state),
   });
   const wasShown = canvasShown;
   canvasShown = true;
@@ -3935,6 +3940,7 @@ async function refreshCanvasData() {
   trailCanvas.setView(keep, { save: false });
 }
 function closeCanvas() {
+  trailCanvas?.endReplay();
   canvasSeq++;
   canvasShown = false;
   canvasEl.hidden = true;
@@ -4437,10 +4443,86 @@ function paintOpened(cur) {
   start.hidden = !cur.startTitle;
   document.getElementById("sb-opened-start-name").textContent = cur.startTitle || "";
 }
+// ---- Replay (B110) ----
+// The canvas runs Replay (renderer/canvas.js); the sidebar shows its list:
+// progress, previous, play or pause, next, the count and End.
+async function startTrailReplay(i = 0) {
+  if (!canvasShown) await api.canvasShow?.();
+  for (let k = 0; k < 40 && !trailCanvas?.data; k++) await new Promise((r) => setTimeout(r, 50));
+  const steps = (await api.trailReplay?.()) || [];
+  if (!trailCanvas?.startReplay(steps, i)) trailCanvas?.say("Nothing to replay yet.");
+}
+// An opened file: start Replay once its canvas is on screen.
+async function replayWhenShown(id) {
+  for (let k = 0; k < 60; k++) {
+    if (canvasShown && trailCanvas?.data?.trail?.id === id) return startTrailReplay(0);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+let replayListSteps = null;
+function paintReplayList(state) {
+  const box = document.getElementById("sb-replay");
+  if (!box) return;
+  document.body.classList.toggle("sb-replaying", Boolean(state));
+  box.hidden = !state;
+  if (!state) {
+    replayListSteps = null;
+    return;
+  }
+  const list = document.getElementById("sb-replay-list");
+  const { steps, i, playing } = state;
+  if (replayListSteps !== steps) {
+    replayListSteps = steps;
+    list.textContent = "";
+    for (const st of steps) {
+      if (st.first) {
+        const head = document.createElement("div");
+        head.className = "sb-replay-head";
+        head.textContent = trailCanvas.stepWhen(st).replace(/ \d{2}:\d{2} · /, " · ");
+        list.append(head);
+      }
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "sb-replay-row";
+      row.setAttribute("role", "listitem");
+      row.dataset.i = String(st.n - 1);
+      const time = st.at === null ? "" : new Date(st.at).toTimeString().slice(0, 5);
+      const kind = { card: "", visit: "Not kept", link: "Link", group: "Group", rename: "Rename", resolve: "Resolved" }[st.kind];
+      row.innerHTML = `<span class="n"></span><span class="nm"></span><span class="k"></span>`;
+      row.querySelector(".n").textContent = String(st.n);
+      row.querySelector(".nm").textContent = st.title;
+      row.querySelector(".k").textContent = kind || time;
+      row.title = `${time} · ${st.caption}`;
+      if (st.kind === "visit") row.classList.add("off");
+      row.addEventListener("click", () => trailCanvas.replayGo(st.n - 1));
+      list.append(row);
+    }
+  }
+  for (const row of list.querySelectorAll(".sb-replay-row")) {
+    const k = Number(row.dataset.i);
+    row.classList.toggle("future", k > i);
+    if (k === i) {
+      row.setAttribute("aria-current", "step");
+      row.scrollIntoView?.({ block: "nearest" });
+    } else row.removeAttribute("aria-current");
+  }
+  document.getElementById("sb-replay-progress").style.transform = `scaleX(${(i + 1) / steps.length})`;
+  document.getElementById("sb-replay-count").textContent = `${i + 1} / ${steps.length}`;
+  const play = document.getElementById("sb-replay-play");
+  play.textContent = playing ? "Pause" : "Play";
+  play.setAttribute("aria-label", playing ? "Pause" : "Play");
+  document.getElementById("sb-replay-prev").disabled = i === 0;
+  document.getElementById("sb-replay-next").disabled = i === steps.length - 1;
+}
+document.getElementById("sb-replay-prev")?.addEventListener("click", () => trailCanvas?.replay && trailCanvas.replayGo(trailCanvas.replay.i - 1));
+document.getElementById("sb-replay-next")?.addEventListener("click", () => trailCanvas?.replay && trailCanvas.replayGo(trailCanvas.replay.i + 1));
+document.getElementById("sb-replay-play")?.addEventListener("click", () => trailCanvas?.replayToggle());
+document.getElementById("sb-replay-end")?.addEventListener("click", () => trailCanvas?.endReplay());
 document.getElementById("sb-opened-start")?.addEventListener("click", async () => {
   const cur = sideTrails.find((t) => t.current);
   if (!cur?.startHere) return;
   if (!canvasShown) await api.canvasShow?.();
+  trailCanvas?.endReplay();
   trailCanvas?.select(cur.startHere, { reveal: true });
 });
 document.getElementById("sb-opened-save")?.addEventListener("click", async () => {
