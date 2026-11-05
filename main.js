@@ -35,6 +35,7 @@ const Rules = require("./core/rules");
 const AI = require("./core/ai");
 const Chat = require("./core/chat");
 const { ResearchStore } = require("./core/research");
+const { TrailStore, migrateSessions, sessionStorageOver } = require("./core/trail");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
 const { BookmarkStore } = require("./core/bookmarks");
@@ -46,6 +47,7 @@ const { extractionScript, autoplayScript, blockAutoplayScript, centerOnClickScri
 const { PlaybackLimiter } = require("./core/playback");
 const { fsStorage } = require("./fs-storage");
 const { normalizeUrl, hostOf, SEARCH_URL, isSensitiveUrl } = require("./core/urls");
+const Ladder = require("./core/ladder");
 const { routesToGoogleWindow, MODES: GOOGLE_MODES } = require("./core/google");
 const { createCompanion } = require("./companion");
 const { createAgentServer } = require("./agent-server");
@@ -84,9 +86,15 @@ const AGENT_UA = `${USER_AGENT} NODE-agent/${app.getVersion()} (+https://github.
 let win;
 let sidebarWidth = SIDEBAR_DEFAULT;
 // Sidebar layout: the sidebar's width (full 272, rail 68, hidden 52), from the renderer.
-let chromeSide = false;
+// The sidebar is NODE's only chrome (B103): there is no top bar any more.
+let chromeSide = true;
+const SIDE_W = 300; // sidebar width (handoff Visual spec); keep in step with --side-w in renderer/styles.css
 let chromeLeft = 0;
 let libraryOpen = false; // the overlay menu (or first-run screen) covers the window: page views hidden
+// The trail canvas is on screen (B102): it is the start page and every new
+// tab, listed first as the trail's canvas. Page views are hidden; activeId
+// keeps the last page tab so ⌘E goes back to it.
+let canvasOn = false;
 // Full screen hides the toolbar (immersive). It comes back while the pointer
 // is at the top edge, or while the renderer holds it (address bar or find
 // bar in use, a menu open). A page's own full screen (a video) takes the
@@ -194,14 +202,12 @@ function contentRect() {
   // sidebar inside a 1px frame, 8px from the window's other edges (or from the
   // suggestions widget, whose column has its own 8px margins). Matches
   // .page-frame in renderer/styles.css.
+  // Pages, Mosaic and private tabs fill the window (B103): the sidebar slides
+  // away and comes back over them at the left edge. The suggestions widget
+  // keeps its column on the right.
   if (chromeSide) {
-    const right = sidebarWidth > 0 ? sidebarWidth : 8;
-    return {
-      x: chromeLeft + 1,
-      y: 9,
-      width: Math.max(280, width - chromeLeft - right - 2),
-      height: Math.max(200, height - 18 - coachHeight),
-    };
+    const right = sidebarWidth > 0 ? sidebarWidth : 0;
+    return { x: 0, y: 0, width: Math.max(280, width - right), height: Math.max(200, height - coachHeight) };
   }
   // Full screen: the page always starts at the top; the toolbar slides over it.
   const top = immersive ? 0 : CHROME_TOP;
@@ -326,7 +332,8 @@ function ensureOverlay() {
   overlay.webContents.on("did-finish-load", () => {
     if (lastMirror) overlay.webContents.send("overlay:mirror", lastMirror);
     overlay.webContents.send("overlay:offset", osTop);
-    if (overlayAttached && chromeShown && immersive) overlay.webContents.send("overlay:show", true);
+    overlay.webContents.send("overlay:mode", chromeSide ? "side" : "top");
+    if (overlayAttached && ((chromeShown && immersive) || sideShown)) overlay.webContents.send("overlay:show", true);
   });
   overlay.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   overlay.webContents.on("will-navigate", (e) => e.preventDefault());
@@ -335,8 +342,66 @@ function ensureOverlay() {
 }
 
 function overlayBounds() {
-  const { width } = chromeBounds();
+  const { width, height } = chromeBounds();
+  if (chromeSide) return { x: 0, y: 0, width: SIDE_W, height };
   return { x: 0, y: 0, width, height: CHROME_TOP + osTop };
+}
+
+// ---- The sidebar over pages (B103, handoff spec 2) ----
+// On the canvas the sidebar is part of the window and always shows. On a
+// page, in Mosaic or a private tab it is out of the way: the pointer within
+// 8 px of the window's left edge brings a copy of it (the overlay layer,
+// chrome-overlay.html) over the page in 200 ms; it leaves 250 ms after the
+// pointer does. ⌘L, ⌘S and the Show Sidebar item bring it too. The page
+// views cover the window, so the pointer position comes from the system.
+let sidePoll = null;
+let sideShown = false;
+let sideHideTimer = null;
+// Brought by a key or menu (⌘S, ⌘L): it stays until the pointer has been
+// over it and left, or the key is pressed again.
+let sideByKey = false;
+let sidePointerIn = false;
+const sideAway = () => Boolean(win) && !canvasOn && !libraryOpen && !htmlFullId;
+function updateSidePoll() {
+  if (sideAway()) {
+    if (!sidePoll) sidePoll = setInterval(pollSide, 50);
+  } else {
+    clearInterval(sidePoll);
+    sidePoll = null;
+    setSideShown(false, { instant: true });
+  }
+}
+function pollSide() {
+  if (!win || overlayHold || chromeHold || popupHold || !win.isVisible() || win.isMinimized()) return;
+  const p = screen.getCursorScreenPoint();
+  const b = win.getContentBounds();
+  const inY = p.y >= b.y && p.y < b.y + b.height;
+  const x = p.x - b.x;
+  if (!sideShown) {
+    if (inY && x >= 0 && x <= 8) setSideShown(true);
+    return;
+  }
+  if (inY && x >= 0 && x < SIDE_W) {
+    sidePointerIn = true;
+    clearTimeout(sideHideTimer);
+    sideHideTimer = null;
+  } else if (sideByKey && !sidePointerIn) {
+    // brought by a key: wait for the pointer
+  } else if (!sideHideTimer) {
+    sideHideTimer = setTimeout(() => setSideShown(false), 250);
+  }
+}
+function setSideShown(on, opts = {}) {
+  clearTimeout(sideHideTimer);
+  sideHideTimer = null;
+  if (on && !sideAway()) return;
+  sideByKey = Boolean(on && opts.byKey);
+  sidePointerIn = false;
+  if (sideShown === on) return;
+  sideShown = on;
+  if (!on) overlayHold = false;
+  sendUi("side-over", { shown: on });
+  showOverlay(on, opts);
 }
 
 // Keep the layer above the pages after a layout change re-adds them.
@@ -364,7 +429,7 @@ function showOverlay(on, { instant = false } = {}) {
   overlay.webContents.send("overlay:show", false);
   const detach = () => {
     overlayTimer = null;
-    if (!overlayAttached || (chromeShown && immersive && !htmlFullId)) return;
+    if (!overlayAttached || (chromeShown && immersive && !htmlFullId) || sideShown) return;
     win.contentView.removeChildView(overlay);
     overlayAttached = false;
     osTop = 0;
@@ -480,6 +545,109 @@ const MOSAIC_MAX_CHOICES = [4, 6, 9, 0];
 function mosaicMax() {
   return loadSettings().mosaicMax;
 }
+// ---- Trail store (B100, core/trail.js) ----
+// Each trail lives in userData/trails/<id>/: trail.json, events.jsonl,
+// view.json and files/. On the first start with this version, the research
+// sessions in userData/sessions/ are copied in (the old files stay). The
+// ResearchStore the rest of main.js uses reads and writes through the trail
+// store, so the research:* channels keep working as wrappers over it.
+let trailStore = null;
+function openTrails() {
+  const userData = app.getPath("userData");
+  trailStore = new TrailStore(fsStorage(path.join(userData, "trails")), { device: "desktop" });
+  const sessionsDir = path.join(userData, "sessions");
+  if (!trailStore.index.migratedAt && fs.existsSync(sessionsDir)) {
+    // Tabs still open in a trail count as engaged pages (B100 migration rule).
+    const openTabsByTrail = {};
+    try {
+      const saved = JSON.parse(fs.readFileSync(sessionFile(), "utf8"));
+      for (const t of saved?.tabs || []) if (t.trail && t.url) (openTabsByTrail[t.trail] = openTabsByTrail[t.trail] || []).push(t.url);
+    } catch (_) {}
+    try {
+      const res = migrateSessions(fsStorage(sessionsDir), trailStore, { openTabsByTrail });
+      log().info(`trails: migrated ${res.trails} sessions (${res.cards} cards, ${res.timelineOnly} timeline-only pages)${res.skipped.length ? `, skipped ${res.skipped.join(", ")}` : ""}`);
+    } catch (err) {
+      log().error(`trails: migration failed: ${err.message}`);
+    }
+  }
+  trailStore.current();
+  return new ResearchStore(sessionStorageOver(trailStore));
+}
+// The trail the canvas shows, with research changes saved first.
+// ---- Pages becoming cards (B104, handoff spec 3) ----
+// A page becomes a card on the canvas when the person engages with it: 20 s
+// on screen (the shown tab or a Mosaic tile, NODE in front), scrolling it,
+// capturing from it, asking AI about it, or still having its tab open when
+// they leave the trail (switch trails or quit). Shorter visits stay in the
+// timeline as "timeline only" with their time on page. The card goes near the
+// page it was opened from (core/placement.js) with an "opened from" line.
+// Private tabs never count. Sign-in and payment pages never become cards (B66).
+const ENGAGE_MS = 20000;
+function pageStarted(tab, url) {
+  pageEnded(tab);
+  if (!/^https?:/i.test(url || "") || tab.private) return void (tab.page = null);
+  // Opened from: the page before it in this tab, or the page that opened the tab.
+  const from = tab.page?.url || tab.lastPageUrl || tab.openedFrom || "";
+  tab.page = { url, from, shownMs: 0, engaged: false, trail: tab.trail };
+  tab.openedFrom = "";
+}
+function pageEnded(tab) {
+  const p = tab.page;
+  if (!p) return;
+  tab.lastPageUrl = p.url;
+  if (!p.engaged && p.shownMs > 0) trailStore?.bounce(p.trail, p.url, p.shownMs);
+  tab.page = null;
+}
+function onScreen(tab) {
+  if (!win || canvasOn || libraryOpen || !win.isFocused() || win.isMinimized()) return false;
+  if (!tab.attached || tab.sleeping) return false;
+  return layout === "mosaic" ? mosaicIds().includes(tab.id) : tab.id === activeId;
+}
+// Once a second: time on screen for the pages that are on screen.
+setInterval(() => {
+  for (const tab of tabs.values()) {
+    const p = tab.page;
+    if (!p || p.engaged || !onScreen(tab)) continue;
+    p.shownMs += 1000;
+    if (p.shownMs >= ENGAGE_MS) engagePage(tab, "dwell");
+  }
+}, 1000).unref?.();
+function engagePage(tab, reason) {
+  const p = tab?.page;
+  if (!p || p.engaged || tab.private || !trailStore) return null;
+  p.engaged = true;
+  return placeCard(p.trail || currentTrail(), p.url, { title: tab.view.webContents.getTitle(), from: p.from, reason });
+}
+function engageUrl(url, reason) {
+  const tab = [...tabs.values()].find((t) => t.page?.url === url);
+  if (tab) return engagePage(tab, reason);
+  return placeCard(currentTrail(), url, { reason });
+}
+function keepOpenTabs(trailId) {
+  if (!trailStore || !trailId) return;
+  for (const tab of tabs.values()) if (tab.trail === trailId && tab.page && !tab.page.engaged) engagePage(tab, "tab-open");
+}
+// The middle of the canvas as last seen, in world units: where a card with no
+// source goes.
+function canvasMiddle(id) {
+  const v = trailStore.view(id);
+  const [w, h] = win ? win.getContentSize() : [1440, 900];
+  const cw = Math.max(400, w - (chromeLeft || 300) - (sidebarWidth || 0));
+  return { x: Math.round((cw / 2 - (v.x || 0)) / (v.z || 1)), y: Math.round((h / 2 - (v.y || 0)) / (v.z || 1)) };
+}
+function placeCard(id, url, opts = {}) {
+  if (!trailStore?.has(id)) return null;
+  research?.saveNow?.();
+  const card = trailStore.placePage(id, url, { near: canvasMiddle(id), ...opts });
+  if (card) sendUi("trail-changed", { trail: id, card: card.id });
+  return card;
+}
+
+function trailSnapshot(id) {
+  research.saveNow();
+  return trailStore.snapshot(id || research.current.id);
+}
+
 // ---- Trails keep their own tabs (B80, docs/18-sidebar-chrome.md) ----
 // Each tab belongs to the trail (research session) that was current when it
 // opened. Only the current trail's tabs show: in the tab list, Mosaic, the
@@ -495,6 +663,7 @@ const trailActive = new Map(); // trail id → the tab that was active in it
 // Runs a change of trail (switch, new) and shows that trail's tabs.
 function changeTrail(fn) {
   const before = currentTrail();
+  keepOpenTabs(before); // B104: tabs still open when leaving a trail become cards
   const result = fn();
   const after = currentTrail();
   if (before === after) return result;
@@ -502,8 +671,11 @@ function changeTrail(fn) {
   const shown = shownTabs();
   let next = trailActive.get(after);
   if (!shown.some((t) => t.id === next)) next = shown.at(-1)?.id;
-  if (!next) next = createTab(newTabUrl());
-  activateTab(next);
+  // From the canvas, or to a trail with no tabs: that trail's canvas.
+  if (canvasOn || !next) {
+    activeId = next || null;
+    showCanvas();
+  } else activateTab(next);
   saveSessionSoon();
   return result;
 }
@@ -537,6 +709,7 @@ function applyLayout(opts) {
   }
   layoutViews(opts);
   raiseOverlay();
+  updateSidePoll();
 }
 
 function layoutViews({ animate } = {}) {
@@ -548,7 +721,7 @@ function layoutViews({ animate } = {}) {
     clearTimeout(exitTimer);
     exitTimer = null;
   }
-  if (libraryOpen) {
+  if (libraryOpen || canvasOn) {
     for (const tab of tabs.values()) hideView(tab);
     return;
   }
@@ -619,7 +792,7 @@ function tabState(tab) {
   const raw = tab.sleeping ? tab.sleeping.url : wc.getURL();
   const google = isPlaceholder(raw);
   let url = raw;
-  if (isStartPage(raw) || isTutorialPage(raw)) url = "";
+  if (isTutorialPage(raw) || /\/renderer\/private\.html$/.test(raw)) url = "";
   else if (isInternal(raw)) {
     try {
       url = new URL(raw).searchParams.get("u") || raw;
@@ -628,6 +801,7 @@ function tabState(tab) {
   return {
     id: tab.id,
     url,
+    private: Boolean(tab.private), // a private tab (B103): no trail, no history
     google, // placeholder for a page shown in the Google window
     tutorial: isTutorialPage(raw), // a practice page of the gestures tutorial
     blocked: adblock ? adblock.blockedIn(wc.id) : 0, // ads and trackers blocked on this page (B73)
@@ -652,7 +826,7 @@ function tabState(tab) {
 
 function emitList() {
   saveSessionSoon();
-  emit({ type: "list", tabs: shownTabs().map(tabState), activeId });
+  emit({ type: "list", tabs: shownTabs().map(tabState), activeId, canvas: canvasOn });
 }
 
 // Sound policy (B03). "auto": only the active tab is audible; background and
@@ -733,7 +907,7 @@ function attachListeners(tab) {
     if (activeId !== tab.id && Date.now() - tab.lastGesture < 1500) activateTab(tab.id);
   });
   on("page-title-updated", (_e, title) => {
-    historyStore.updateTitle(wc.getURL(), title);
+    if (!tab.private) historyStore.updateTitle(wc.getURL(), title);
     // Google refuses sign-in in apps built on Electron. Say so, and offer the
     // system browser for tasks that need a Google account.
     if (/(^|\.)accounts\.google\.com$/.test(hostOf(wc.getURL())) && /couldn.t sign you in/i.test(title)) {
@@ -747,6 +921,7 @@ function attachListeners(tab) {
   // Ctrl/Cmd + mouse wheel or trackpad pinch.
   on("zoom-changed", (_e, direction) => zoomTab(tab, direction === "in" ? 0.5 : -0.5));
   on("did-navigate", (_e, url) => {
+    pageStarted(tab, url); // B104: time on page, engagement
     if (/^https?:/i.test(url)) tab.lastUrl = url;
     // The toolbar count is per page (B73). It starts again when a new page
     // starts loading (did-start-navigation), not here: by the time
@@ -760,7 +935,7 @@ function attachListeners(tab) {
     }
     playback.stopped(tab.id);
     playback.navigated(tab.id);
-    if (!isInternal(url)) historyStore.record(url, wc.getTitle());
+    if (!isInternal(url) && !tab.private) historyStore.record(url, wc.getTitle());
     refreshRule(tab, url);
     applyLayout();
     ping();
@@ -854,30 +1029,6 @@ function attachListeners(tab) {
         return;
       }
     }
-    // The × on a start-page tile: forget that page and show the start page again.
-    // The survey card's buttons (B98) come here too.
-    if (isStartPage(e.url)) {
-      let gone = "";
-      let act = "";
-      try {
-        const sp = new URL(e.url).searchParams;
-        gone = sp.get("remove") || "";
-        act = sp.get("survey-act") || "";
-      } catch (_) {}
-      if (act) {
-        e.preventDefault();
-        surveyCardAnswer(act);
-        const SURVEY_URL = require("./core/urls").SURVEY_URL;
-        wc.loadURL(act === "take" ? loadTarget(SURVEY_URL, tab.id) : startPageUrl());
-        return;
-      }
-      if (gone) {
-        e.preventDefault();
-        historyStore?.remove?.(gone);
-        wc.loadURL(startPageUrl());
-      }
-      return;
-    }
     toGoogle(e, e.url);
   });
   on("will-redirect", (e) => {
@@ -891,7 +1042,7 @@ function attachListeners(tab) {
     if (allowed && routesToGoogleWindow(url, googleMode())) {
       routeGoogle(url, tab.id);
     } else if (allowed) {
-      createTab(url, { background: disposition === "background-tab" });
+      createTab(url, { background: disposition === "background-tab", from: tab.page?.url || "" });
     } else {
       emit({ type: "popup-blocked", tabId: tab.id, url });
     }
@@ -1309,7 +1460,7 @@ function saveSessionSoon() {
 function saveSessionNow() {
   clearTimeout(sessionTimer);
   if (pagesReleased) return; // quitting: keep the last saved list
-  const list = [...tabs.values()].map((t) => ({ ...tabState(t), trail: t.trail })).filter((t) => /^https?:/i.test(t.url));
+  const list = [...tabs.values()].filter((t) => !t.private).map((t) => ({ ...tabState(t), trail: t.trail })).filter((t) => /^https?:/i.test(t.url));
   const active = list.findIndex((t) => t.id === activeId);
   try {
     fs.writeFileSync(sessionFile(), JSON.stringify({ version: 1, layout, active: Math.max(0, active), tabs: list.map((t) => ({ url: t.url, title: t.title, ...(t.tile ? { tile: true } : {}), ...(t.trail ? { trail: t.trail } : {}) })) }));
@@ -1326,8 +1477,8 @@ function restoreSession() {
   // Tabs saved before trails kept tabs have none: they join the current trail.
   const ids = list.map((t, i) => createTab(t.url, { background: i !== active, sleeping: i !== active, restore: true, title: t.title, tile: t.tile === true, trail: typeof t.trail === "string" ? t.trail : undefined }));
   const target = tabs.get(ids[active]);
-  if (target && inCurrentTrail(target)) activateTab(target.id);
-  else activateTab(shownTabs().at(-1)?.id || createTab(newTabUrl()));
+  // The window then shows the trail's canvas (B102); activeId is the page ⌘E goes back to.
+  activeId = target && inCurrentTrail(target) ? target.id : shownTabs().at(-1)?.id || null;
   return true;
 }
 
@@ -1473,9 +1624,9 @@ function isPlaceholder(url) {
 
 // NODE's own pages shown in a tab: the Google window placeholder, the
 // "page not loaded" / "page stopped" page (both carry the real address in ?u=)
-// and the new tab page.
+// the gestures tutorial's pages and the private tab's page.
 function isInternal(url) {
-  return /\/renderer\/(google-tab|error)\.html\?/.test(String(url || "")) || isStartPage(url) || isTutorialPage(url);
+  return /\/renderer\/(google-tab|error)\.html\?/.test(String(url || "")) || isTutorialPage(url) || /\/renderer\/private\.html$/.test(String(url || ""));
 }
 
 // The gestures tutorial's practice pages (B72): no address shown, no suggestions.
@@ -1483,22 +1634,10 @@ function isTutorialPage(url) {
   return /\/renderer\/tutorial\/[a-z]+\.html$/.test(String(url || ""));
 }
 
-function isStartPage(url) {
-  return /\/renderer\/start\.html(\?|$)/.test(String(url || ""));
-}
 
-// The new tab page, with the most visited pages from history.
-function startPageUrl() {
-  const file = path.join(__dirname, "renderer", "start.html");
-  const top = (historyStore?.top?.(8) || []).map((r) => ({ url: r.url, title: String(r.title || "").slice(0, 80) }));
-  const days = surveyCardDays();
-  return `file://${file.split(path.sep).join("/")}?top=${encodeURIComponent(JSON.stringify(top))}${days ? `&survey=${days}` : ""}`;
-}
-
-// ---- Beta survey on the new tab page (B98) ----
+// ---- Beta survey on the trail canvas (B98, moved by B102) ----
 // The same survey prompt as the one in the suggestions widget (B65), shown as
-// a larger card on the new tab page once NODE has been used on 3 different
-// days. The answer is shared with the window, which keeps it as node.survey:
+// a section of the canvas once NODE has been used on 3 different days. The answer is shared with the window, which keeps it as node.survey:
 // Take survey and Don't ask again end both prompts; Later waits for another
 // day of use. The state is kept in survey.json so a new tab opened before the
 // window has loaded still knows it; until either has it, no card is shown.
@@ -1534,7 +1673,7 @@ function surveyCardDays() {
   if (days < SURVEY_AFTER_DAYS || (s.laterDays && days <= s.laterDays)) return 0;
   return days;
 }
-// A choice made on the card: the start page navigates to ?survey-act=…
+// A choice made on the canvas section: take, never or later.
 function surveyCardAnswer(act) {
   const days = (() => {
     try {
@@ -1548,11 +1687,6 @@ function surveyCardAnswer(act) {
   else setSurveyState({ state: "ask", laterDays: days });
 }
 
-// What a new tab opens: NODE's start page, or the address set in Settings.
-function newTabUrl() {
-  const custom = loadSettings().startPage;
-  return /^https?:\/\//i.test(custom || "") ? custom : startPageUrl();
-}
 
 function errorUrl(target, { kind = "load", desc = "" } = {}) {
   const file = path.join(__dirname, "renderer", "error.html");
@@ -1576,16 +1710,31 @@ function routeGoogle(url, tabId) {
 
 // The address a tab should load: the placeholder for routed Google pages.
 function loadTarget(url, tabId, { restore = false } = {}) {
-  if (isStartPage(url)) return url;
   const target = normalizeUrl(url);
   if (restore && routesToGoogleWindow(target, googleMode())) return placeholderUrl(target);
   return routeGoogle(target, tabId) ? placeholderUrl(target) : target;
 }
 
+// Private tabs (handoff spec 9): each has its own in-memory session (a
+// partition without "persist:"), so cookies and storage go when it closes.
+// It is in no trail, so it shows in every trail's tab list.
+function privateSession(id) {
+  const ses = session.fromPartition(`private-${id}`);
+  installPermissionHandlers(ses);
+  adblock?.install(ses);
+  watchDownloads(ses);
+  return ses;
+}
+function privatePageUrl() {
+  return `file://${path.join(__dirname, "renderer", "private.html").split(path.sep).join("/")}`;
+}
+
 function createTab(url, opts = {}) {
   const id = String(idSeq++);
+  if (opts.private && !url) url = privatePageUrl();
   const view = new WebContentsView({
     webPreferences: {
+      ...(opts.private ? { session: privateSession(id) } : {}),
       preload: path.join(__dirname, "view-preload.js"),
       additionalArguments: [`--scout-tab=${id}`],
       nodeIntegrationInSubFrames: true, // runs view-preload.js in frames too, for sign-in forms there (no Node access: sandboxed)
@@ -1596,7 +1745,7 @@ function createTab(url, opts = {}) {
   });
   view.setBackgroundColor("#ffffff"); // pages without their own background expect white
   view.webContents.setUserAgent(USER_AGENT);
-  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), idleMs: 0, tile: Boolean(opts.tile), trail: opts.trail || currentTrail() };
+  const tab = { id, view, audio: "auto", audioByUser: false, lastGesture: 0, lastActive: Date.now(), idleMs: 0, tile: Boolean(opts.tile), trail: opts.private ? null : opts.trail || currentTrail(), private: Boolean(opts.private), openedFrom: opts.from || "" };
   refreshRule(tab, normalizeUrl(url));
   tabs.set(id, tab);
   win.contentView.addChildView(view);
@@ -1613,6 +1762,11 @@ function createTab(url, opts = {}) {
     applyLayout();
   });
   if (!opts.background || !activeId) activeId = id;
+  if (!opts.background) canvasAsk++;
+  if (!opts.background && canvasOn) {
+    canvasOn = false;
+    sendUi("canvas", { open: false });
+  }
   if (opts.sleeping && activeId !== id) {
     // Restored tab: the page loads when the tab is first opened.
     tab.sleeping = { url: normalizeUrl(url), title: opts.title || "" };
@@ -1636,7 +1790,7 @@ function closeTab(id) {
   if (!tab) return;
   {
     const st = tabState(tab);
-    if (/^https?:/i.test(st.url)) {
+    if (/^https?:/i.test(st.url) && !tab.private) {
       closedTabs.push({ url: st.url, title: st.title });
       if (closedTabs.length > 25) closedTabs.shift();
     }
@@ -1662,8 +1816,10 @@ function closeTab(id) {
   playback.closed(id);
   if (activeId === id) {
     activeId = shownTabs().at(-1)?.id || null;
+    if (!canvasOn && activeId) wakeTab(tabs.get(activeId));
   }
-  if (!activeId) createTab(newTabUrl());
+  // The last page tab closed: back to the trail's canvas.
+  if (!activeId && !canvasOn) return showCanvas();
   applyLayout(layout === "mosaic" ? { animate: "move" } : {});
   emitList();
 }
@@ -1803,14 +1959,32 @@ function stepTab(dir) {
 }
 
 function pickTab(index) {
-  // In Mosaic, ⌘1 to ⌘4 focus that tile (B72).
-  if (layout === "mosaic" && !libraryOpen && index >= 0) {
+  // In Mosaic (on screen), ⌘1 to ⌘4 focus that tile (B72).
+  if (layout === "mosaic" && !libraryOpen && !canvasOn && index >= 0) {
     const id = mosaicIds()[index];
     if (id) return focusTile(id);
   }
+  // ⌘1 is the trail's canvas; ⌘2 to ⌘8 the page tabs in order; ⌘9 the last (B102).
+  if (index === 0) return showCanvas();
   const ids = shownTabs().map((t) => t.id);
-  const id = index < 0 ? ids.at(-1) : ids[index];
+  const id = index < 0 ? ids.at(-1) : ids[index - 1];
   if (id) activateTab(id);
+}
+
+// Shows the current trail's canvas (B102). focus: put the cursor in its search
+// bar (⌘T). select: the card to select, by page address (⌘E from a page).
+let canvasAsk = 0;
+async function showCanvas({ focus = false, select = "" } = {}) {
+  const ask = ++canvasAsk;
+  // Pictures of the pages on screen for their cards, taken before they hide.
+  if (!canvasOn && !libraryOpen) {
+    await Promise.all([...tabs.values()].filter((t) => t.attached && !t.sleeping).map((t) => thumbOf(t)));
+    if (ask !== canvasAsk) return; // a tab was opened meanwhile
+  }
+  canvasOn = true;
+  applyLayout();
+  sendUi("canvas", { open: true, focus, select });
+  emitList();
 }
 
 async function savePdf(id) {
@@ -1842,6 +2016,11 @@ function uniquePath(file) {
 function activateTab(id) {
   if (!tabs.has(id)) return;
   activeId = id;
+  canvasAsk++;
+  if (canvasOn) {
+    canvasOn = false;
+    sendUi("canvas", { open: false });
+  }
   wakeTab(tabs.get(id));
   tabs.get(id).lastActive = Date.now();
   tabs.get(id).idleMs = 0;
@@ -1935,11 +2114,10 @@ function loadSettings() {
   base.restoreTabs = raw.restoreTabs !== false;
   base.autoUpdate = raw.autoUpdate !== false;
   base.passkeys = raw.passkeys === true;
-  base.startPage = typeof raw.startPage === "string" ? raw.startPage : "";
   base.mosaicMax = MOSAIC_MAX_CHOICES.includes(raw.mosaicMax) ? raw.mosaicMax : 4;
   base.tabSleep = SLEEP_CHOICES.includes(raw.tabSleep) ? raw.tabSleep : 30;
   base.passwordsOffer = raw.passwordsOffer !== false;
-  base.chromeLayout = raw.chromeLayout === "side" ? "side" : "top";
+  base.chromeLayout = "side"; // the only layout since B103
   base.displayName = typeof raw.displayName === "string" ? raw.displayName.trim().slice(0, 60) : "";
   // First-run setup is shown once, to new users. Settings saved by an earlier
   // version count as set up. Runs with --user-data-dir (the tests) skip it
@@ -1977,10 +2155,8 @@ function saveSettings(next) {
   if (next && "restoreTabs" in next) current.restoreTabs = Boolean(next.restoreTabs);
   if (next && "autoUpdate" in next) current.autoUpdate = Boolean(next.autoUpdate);
   if (next && "passkeys" in next) current.passkeys = Boolean(next.passkeys);
-  if (next && typeof next.startPage === "string") current.startPage = /^https?:\/\//i.test(next.startPage.trim()) ? next.startPage.trim() : "";
   if (next && next.firstRunDone) current.firstRunDone = true;
   if (next && "passwordsOffer" in next) current.passwordsOffer = Boolean(next.passwordsOffer);
-  if (next && "chromeLayout" in next) current.chromeLayout = next.chromeLayout === "side" ? "side" : "top";
   if (next && typeof next.displayName === "string") current.displayName = next.displayName.trim().replace(/\s+/g, " ").slice(0, 60);
   if (next && "tabSleep" in next && SLEEP_CHOICES.includes(Number(next.tabSleep))) current.tabSleep = Number(next.tabSleep);
   if (next && MOSAIC_MAX_CHOICES.includes(Number(next.mosaicMax))) {
@@ -2017,11 +2193,10 @@ function saveSettings(next) {
     restoreTabs: current.restoreTabs !== false,
     autoUpdate: current.autoUpdate !== false,
     passkeys: current.passkeys === true,
-    startPage: current.startPage || "",
     mosaicMax: current.mosaicMax,
     tabSleep: current.tabSleep,
     passwordsOffer: current.passwordsOffer !== false,
-    chromeLayout: current.chromeLayout === "side" ? "side" : "top",
+    chromeLayout: "side",
     displayName: current.displayName || "",
     firstRunDone: Boolean(current.firstRunDone),
     agents: { enabled: current.agents.enabled, port: current.agents.port, token: encryptSecret(current.agents.token) },
@@ -2069,11 +2244,10 @@ function publicSettings() {
     passkeys: s.passkeys === true,
     passkeysActive: PASSKEYS_ON,
     update: updater ? updater.state() : null,
-    startPage: s.startPage || "",
     mosaicMax: s.mosaicMax,
     tabSleep: s.tabSleep,
     passwordsOffer: s.passwordsOffer !== false,
-    chromeLayout: s.chromeLayout === "side" ? "side" : "top",
+    chromeLayout: "side",
     displayName: s.displayName || "",
     firstRunDone: Boolean(s.firstRunDone),
     googleWindow: companion ? companion.status() : null,
@@ -2252,14 +2426,13 @@ function buildMenu() {
         {
           label: "New Tab",
           accelerator: "CmdOrCtrl+T",
-          click: () => {
-            // Sidebar layout: ⌘T opens the CommandBar; the tab opens from there.
-            if (chromeSide) return sendUi("focus-omni", { newTab: true });
-            createTab(newTabUrl());
-            sendUi("focus-omni");
-          },
+          // Every new tab is the trail's canvas, with its search bar ready (B102).
+          click: () => showCanvas({ focus: true }),
         },
-        { label: "Close Tab", accelerator: "CmdOrCtrl+W", click: () => activeId && closeTab(activeId) },
+        // Private tab (handoff spec 9): not in any trail, no history.
+        { label: "New Private Tab", accelerator: "CmdOrCtrl+Shift+N", click: () => createTab("", { private: true }) },
+        // The canvas cannot close.
+        { label: "Close Tab", accelerator: "CmdOrCtrl+W", click: () => !canvasOn && activeId && closeTab(activeId) },
         {
           label: "Reopen Closed Tab",
           accelerator: "CmdOrCtrl+Shift+T",
@@ -2273,7 +2446,7 @@ function buildMenu() {
         { label: "Bookmarks", accelerator: "CmdOrCtrl+Shift+B", click: () => sendUi("open-bookmarks") },
         { type: "separator" },
         { label: "Share Trail…", click: () => sendUi("share-trail") },
-        { label: "Open Shared Trail…", click: () => chooseSharedTrail() },
+        { label: "Open Trail File…", accelerator: "CmdOrCtrl+O", click: () => chooseSharedTrail() },
         { type: "separator" },
         { label: "Screenshot Tab", accelerator: "CmdOrCtrl+Shift+S", click: () => runShotFromMain(activeId) },
         { label: "Print…", accelerator: "CmdOrCtrl+P", click: () => activeWc()?.print({}, () => {}) },
@@ -2323,6 +2496,15 @@ function buildMenu() {
           accelerator: "CmdOrCtrl+]",
           click: () => activeWc()?.canGoForward() && activeWc().goForward(),
         },
+        // From a page to its trail's canvas with its card selected; from the canvas back to that page.
+        {
+          label: "Trail Canvas",
+          accelerator: "CmdOrCtrl+E",
+          click: () => {
+            if (canvasOn) return activeId && activateTab(activeId);
+            showCanvas({ select: activeId && tabs.has(activeId) ? tabState(tabs.get(activeId)).url : "" });
+          },
+        },
         { label: "Toggle Mosaic", accelerator: "CmdOrCtrl+Shift+M", click: () => sendUi("toggle-layout") },
         { label: "Choose Tabs for Mosaic…", accelerator: "CmdOrCtrl+Shift+\\", click: () => sendUi("overview") },
         {
@@ -2335,18 +2517,8 @@ function buildMenu() {
         },
         { label: "Show or Hide Suggestions", accelerator: "CmdOrCtrl+Shift+.", click: () => sendUi("toggle-suggest") },
         { type: "separator" },
-        {
-          id: "sidebar-layout",
-          label: "Use Sidebar Layout",
-          type: "checkbox",
-          checked: loadSettings().chromeLayout === "side",
-          click: (item) => {
-            saveSettings({ chromeLayout: item.checked ? "side" : "top" });
-            sendUi("chrome-layout", { mode: item.checked ? "side" : "top" });
-          },
-        },
-        { id: "sidebar-toggle", label: "Show or Hide Sidebar", accelerator: "CmdOrCtrl+S", click: () => sendUi("sidebar-toggle") },
-        { id: "sidebar-rail", label: "Compact or Full Sidebar", click: () => sendUi("sidebar-rail") },
+        // Over a page the sidebar is out of the way; this brings it over the page, or sends it away.
+        { id: "sidebar-toggle", label: "Show Sidebar", accelerator: "CmdOrCtrl+S", click: () => setSideShown(!sideShown, { byKey: true }) },
         { type: "separator" },
         { label: "Menu: Library, History, Settings", accelerator: "CmdOrCtrl+,", click: () => sendUi("open-menu", { section: "settings" }) },
         { type: "separator" },
@@ -2475,7 +2647,9 @@ function createWindow() {
   });
   win.webContents.on("render-process-gone", (_e, d) => log().error(`interface stopped: ${d.reason}`));
   win.webContents.on("did-finish-load", () => {
-    if (!tabs.size && !restoreSession()) createTab(newTabUrl());
+    // NODE opens on the last trail's canvas, at its saved position (B102).
+    if (!tabs.size) restoreSession();
+    showCanvas();
     // Trail files opened from Finder or Explorer before the window was ready.
     uiReady = true;
     setTimeout(() => {
@@ -2626,7 +2800,7 @@ app.whenReady().then(() => {
   updater = createUpdater({ app, log: log(), notify: (m) => sendUi("update-ready", m), isEnabled: () => loadSettings().autoUpdate !== false });
   updater.start();
   log().info(`NODE ${app.getVersion()} started (Electron ${process.versions.electron}, ${process.platform} ${process.arch})`);
-  research = new ResearchStore(fsStorage(path.join(app.getPath("userData"), "sessions")));
+  research = openTrails();
   historyStore = new HistoryStore(fsStorage(app.getPath("userData")));
   companion = createCompanion({
     userData: app.getPath("userData"),
@@ -2663,21 +2837,24 @@ app.on("will-quit", () => {
   agentServer?.stop();
 });
 
-// No address (the + button, double-click on the tab bar): a new tab page.
+// No address (the + button, double-click on the tab bar): the trail's canvas
+// with its search bar ready, as ⌘T (B102).
 ipcMain.handle("tab:create", (_e, url) => {
   if (url && isShareLink(url)) return void openShareLink(url);
-  const id = createTab(url ? url : newTabUrl());
-  // Top bar: the cursor goes to the address bar. Sidebar: the blank tab was
-  // asked for from the CommandBar, which has just closed.
-  if (!url && !chromeSide) sendUi("focus-omni");
+  if (!url) return void showCanvas({ focus: true });
+  const id = createTab(url);
+  if (canvasOn) activateTab(id);
   return id;
 });
+ipcMain.handle("tab:private", () => createTab("", { private: true }));
 ipcMain.handle("tab:close", (_e, id) => closeTab(id));
 ipcMain.handle("tab:activate", (_e, id) => activateTab(id));
 ipcMain.handle("tab:navigate", (_e, id, url) => {
   const tab = tabs.get(id);
-  if (!tab) return;
   if (isShareLink(url)) return void openShareLink(url);
+  // No such tab (an address typed on the canvas, or the tab closed): a new tab.
+  if (!tab) return url ? createTab(url) : undefined;
+  if (canvasOn && id === activeId) activateTab(id);
   tab.sleeping = null;
   tab.view.webContents.loadURL(loadTarget(url, id));
 });
@@ -2694,6 +2871,12 @@ ipcMain.handle("layout:set", (_e, mode) => setLayoutMode(mode));
 function setLayoutMode(mode, { tell = false } = {}) {
   const before = layout;
   layout = mode === "mosaic" ? "mosaic" : "focus";
+  // Mosaic from the canvas: the pages come back, tiled.
+  if (layout === "mosaic" && canvasOn && shownTabs().length) {
+    canvasOn = false;
+    sendUi("canvas", { open: false });
+    emitList();
+  }
   // Into Mosaic from a tab that has no tile: the first chosen tile becomes active.
   const ids = layout === "mosaic" ? mosaicIds() : [];
   if (ids.length && !ids.includes(activeId)) {
@@ -2718,24 +2901,25 @@ function focusTile(id) {
   setLayoutMode("focus", { tell: true });
 }
 
-// ---- Pinch (B72) ----
+// ---- Pinch (B72, B107) ----
 // view-preload.js sends trackpad pinches (not Ctrl + mouse wheel) as scale
-// steps. Like Safari: in Focus, pinching out zooms the page; pinching in
-// zooms the page back to 100%, and from 100% on to Mosaic. In Mosaic, pinch
-// in opens the tab overview and pinch out focuses the tile under the fingers.
-// One gesture changes one level.
-const PINCH_IN = 0.82;
-const PINCH_OUT = 1.22;
+// steps. Like Safari: on a page, pinching out zooms the page; pinching in
+// zooms the page back to 100%, and from 100% on up the ladder.
 let pinchG = null;
+// The zoom ladder (B107, core/ladder.js): on a page or in Mosaic, a pinch
+// moves one level per gesture: page → Mosaic → Gallery → canvas, and back
+// down. A gesture that starts on a zoomed page, or zooms in on a page, zooms
+// the page instead (⌘+ and ⌘− also zoom the page).
+const ladderGesture = new Ladder.Gesture();
 function onPinch(tab, factor) {
   const f = Math.max(0.5, Math.min(2, Number(factor) || 1));
-  if (!pinchG || pinchG.id !== tab.id) {
+  const now = Date.now();
+  const level = layout === "mosaic" ? "mosaic" : "page";
+  if (!pinchG || pinchG.id !== tab.id || now - pinchG.at > Ladder.GESTURE_END_MS) {
     const zoomed = tab.view.webContents.getZoomFactor() > 1.01;
-    const mode = layout === "mosaic" && !libraryOpen ? "level" : zoomed || f > 1 ? "page" : "level";
-    pinchG = { id: tab.id, mode, acc: 1, fired: false };
+    pinchG = { id: tab.id, mode: level === "page" && (zoomed || f > 1) ? "page" : "ladder" };
   }
-  clearTimeout(pinchG.timer);
-  pinchG.timer = setTimeout(() => (pinchG = null), 260);
+  pinchG.at = now;
   if (pinchG.mode === "page") {
     const wc = tab.view.webContents;
     wc.setZoomFactor(Math.max(1, Math.min(3, wc.getZoomFactor() * f)));
@@ -2743,17 +2927,19 @@ function onPinch(tab, factor) {
     pinchG.emit = setTimeout(emitList, 120);
     return;
   }
-  if (pinchG.fired) return;
-  pinchG.acc *= f;
-  if (pinchG.acc < PINCH_IN) {
-    pinchG.fired = true;
-    if (layout === "mosaic") sendUi("overview");
-    else setLayoutMode("mosaic", { tell: true });
-  } else if (pinchG.acc > PINCH_OUT && layout === "mosaic") {
-    pinchG.fired = true;
-    focusTile(tab.id);
-  }
+  const dir = ladderGesture.feed(f, now);
+  if (dir) goLevel(Ladder.step(level, dir), tab);
 }
+// Shows one level of the ladder. tab: the page the pinch was on.
+function goLevel(level, tab = tabs.get(activeId)) {
+  if (level === "page") return tab && focusTile(tab.id);
+  if (level === "mosaic") return setLayoutMode("mosaic", { tell: true });
+  if (level === "gallery") return sendUi("overview", { fromMosaic: layout === "mosaic" });
+  if (level === "canvas") return showCanvas();
+}
+ipcMain.handle("layout:ladder", (_e, level) => {
+  if (Ladder.LEVELS.includes(level)) goLevel(level);
+});
 // Messages from the page script (view-preload.js) name their tab by the
 // webContents that sent them, never by the id the script read from its
 // process: Chromium can host frames of one site from several tabs in one
@@ -2763,21 +2949,16 @@ ipcMain.on("tab:pinch", (e, _id, factor) => {
   const tab = senderTab(e);
   if (tab && !libraryOpen) onPinch(tab, factor);
 });
-ipcMain.handle("layout:chrome", (_e, { mode, left } = {}) => {
-  const side = mode === "side";
-  chromeLeft = side ? Math.max(0, Math.min(400, Math.round(Number(left) || 0))) : 0;
-  if (side !== chromeSide) {
-    chromeSide = side;
-    // Switched while in full screen: the top bar slides; the sidebar stays.
-    if (win?.isFullScreen()) {
-      if (side && immersive) leaveImmersive();
-      else if (!side && !immersive) enterImmersive();
-    }
-    const item = Menu.getApplicationMenu()?.getMenuItemById("sidebar-layout");
-    if (item) item.checked = side;
-  }
+// The sidebar is the only layout (B103); the window reports its width.
+ipcMain.handle("layout:chrome", (_e, { left } = {}) => {
+  chromeLeft = Math.max(0, Math.min(400, Math.round(Number(left) || 0)));
   applyLayout();
   return { side: chromeSide, left: chromeLeft };
+});
+// For tests and the keyboard: bring the sidebar over the page, or send it away.
+ipcMain.handle("layout:side-over", (_e, on) => {
+  setSideShown(Boolean(on), { byKey: true });
+  return sideShown;
 });
 ipcMain.handle("layout:sidebar", (_e, w) => {
   sidebarWidth = Math.max(160, Math.min(360, Number(w) || SIDEBAR_DEFAULT));
@@ -2845,10 +3026,18 @@ ipcMain.on("overlay:hold", (e, on) => {
   if (overlayHold && immersive && !chromeShown) setChromeShown(true);
 });
 ipcMain.on("chrome:focus-overlay", (e, fieldPath) => {
-  if (e.sender !== win?.webContents || !immersive || htmlFullId || !Array.isArray(fieldPath)) return;
-  overlayHold = true; // until the layer reports the field lost focus
-  if (!chromeShown) setChromeShown(true);
-  else showOverlay(true);
+  if (e.sender !== win?.webContents || htmlFullId || !Array.isArray(fieldPath)) return;
+  if (chromeSide) {
+    // ⌘L or ⌘F over a page: the sidebar comes over the page with the field ready.
+    if (!sideAway()) return;
+    setSideShown(true, { byKey: true });
+    overlayHold = true;
+  } else {
+    if (!immersive) return;
+    overlayHold = true; // until the layer reports the field lost focus
+    if (!chromeShown) setChromeShown(true);
+    else showOverlay(true);
+  }
   overlay.webContents.focus();
   overlay.webContents.send("overlay:focus", fieldPath);
 });
@@ -3018,6 +3207,11 @@ ipcMain.handle("overview:close", (_e, ids) => {
     let n = 0;
     for (const t of shownTabs()) t.tile = pick.has(t.id) && n++ < max;
     layout = "mosaic";
+    // View in Mosaic from the Gallery over the canvas: the tiles come back (B107).
+    if (canvasOn) {
+      canvasOn = false;
+      sendUi("canvas", { open: false });
+    }
     const shown = mosaicIds();
     if (shown.length && !shown.includes(activeId)) activeId = shown[0];
     wakeTab(tabs.get(activeId));
@@ -3056,6 +3250,10 @@ ipcMain.handle("tab:menu", (_e, id, x, y) => {
   items.push({ type: "separator" }, { label: "Close Tab", click: () => closeTab(tab.id) });
   popupHold = true;
   Menu.buildFromTemplate(items).popup({ window: win, x: Math.round(x), y: Math.round(y), callback: () => (popupHold = false) });
+});
+// The person scrolled the page by hand (view-preload.js, B104).
+ipcMain.on("tab:engaged", (e, reason) => {
+  if (reason === "scroll") engagePage(senderTab(e), "scroll");
 });
 ipcMain.on("tab:activity", (e) => {
   const tab = senderTab(e);
@@ -3152,6 +3350,7 @@ function loopMenu(id) {
 ipcMain.handle("ai:ask", async (_e, id, question, history) => {
   const tab = tabs.get(id || activeId);
   if (!tab) return { ok: false, error: "No page open." };
+  engagePage(tab, "ask"); // B104: a page asked about becomes a card
   const ai = loadSettings().ai;
   if (!Chat.canChat(ai)) return { ok: false, error: "Set up a model first under Settings → AI: a local model (Ollama or LM Studio) or a Grok API key." };
   usage().count("agentRuns");
@@ -3508,6 +3707,7 @@ function addRecord(folder, name, sourceUrl, note) {
   // Screenshots, saved pages and media from a page also go in the session's trail.
   const kind = { screenshots: "shot", saves: "save", media: "media" }[folder];
   if (research && kind && /^https?:/i.test(sourceUrl || "")) {
+    engageUrl(sourceUrl, "capture"); // B104: a page captured from becomes a card
     research.capture({ libraryId: item.id, kind, name, url: sourceUrl, title: folder === "media" ? "" : note });
     usage().count("captures");
   }
@@ -3541,6 +3741,137 @@ function extensionFor(contentType, url, kind) {
 }
 
 // ---- Research session IPC (B17) ----
+// trail:* channels (B100). research:* stays as a wrapper over the same store
+// until the old sidebar is gone.
+ipcMain.handle("trail:get", (_e, id) => trailSnapshot(id ? String(id) : ""));
+// Pictures of the current trail's open tabs for their cards (B101), by
+// address: { url: { thumb, tabId } }. Taken now for tabs on screen; other
+// tabs use the picture from when they left the screen. Kept in memory only.
+ipcMain.handle("trail:previews", async () => {
+  const out = {};
+  for (const tab of shownTabs()) {
+    const url = tabState(tab).url;
+    if (!/^https?:/i.test(url || "")) continue;
+    const thumb = tab.attached && !tab.sleeping && !libraryOpen ? await thumbOf(tab) : tab.thumb || "";
+    out[url] = { thumb, tabId: tab.id };
+  }
+  return out;
+});
+ipcMain.handle("trail:list", () => {
+  research.saveNow();
+  return trailStore.list().map((t) => {
+    const own = [...tabs.values()].filter((x) => x.trail === t.id && /^https?:/i.test(tabState(x).url));
+    // playing: media in that trail's tabs (it keeps playing, muted, in other trails).
+    return { ...t, tabs: own.length, playing: own.some((x) => x.view.webContents.isCurrentlyAudible()) };
+  });
+});
+// Put on canvas (B104): a timeline-only page, or a removed card, by address
+// or card id; x, y: where it was dropped (world units), else placed near its
+// source. Remove from canvas: the card leaves the canvas; its events and
+// lines are kept and come back when it is put back.
+ipcMain.handle("trail:place", (_e, { url, card, x, y } = {}) => {
+  const id = currentTrail();
+  research.saveNow();
+  const pos = typeof x === "number" && typeof y === "number" ? { x: Math.round(x), y: Math.round(y) } : {};
+  let c = null;
+  if (card) c = trailStore.restoreCard(id, String(card), pos);
+  else if (url) {
+    const row = trailStore.pageRows(id).find((r) => r.url === url);
+    c = placeCard(id, String(url), { title: row?.title || "", reason: "put", ...pos });
+  }
+  return c ? trailSnapshot(id) : null;
+});
+ipcMain.handle("trail:remove", (_e, cardId) => {
+  const id = currentTrail();
+  research.saveNow();
+  return trailStore.removeCard(id, String(cardId)) ? trailSnapshot(id) : null;
+});
+// ---- Canvas tools (B105, handoff spec 4) ----
+// Each writes to the trail store, then the session the sidebar and threads
+// use is read again from it, and the window gets the new snapshot. Tools are
+// off for read-only trails (opened files).
+function canvasEdit(fn) {
+  const id = currentTrail();
+  if (!trailStore?.has(id) || trailStore.get(id).trail.readonly) return null;
+  research.saveNow();
+  const out = fn(id);
+  research.reload();
+  sendUi("session-reloaded");
+  return out ? { result: out, snap: trailSnapshot(id) } : null;
+}
+const GROUP_SIDE = 24;
+const GROUP_TOP = 48;
+ipcMain.handle("trail:move", (_e, cardId, x, y) => canvasEdit((id) => trailStore.moveCard(id, String(cardId), Number(x), Number(y))));
+ipcMain.handle("trail:group-move", (_e, groupId, x, y) => canvasEdit((id) => trailStore.moveGroup(id, String(groupId), Number(x), Number(y))));
+// Link: a drawn line (kind "you") from one card to another.
+ipcMain.handle("trail:link", (_e, from, to, label = "") => canvasEdit((id) => trailStore.link(id, String(from), String(to), { kind: "you", label: String(label || "") })));
+ipcMain.handle("trail:link-label", (_e, lineId, label) => canvasEdit((id) => trailStore.labelLine(id, String(lineId), String(label || ""))));
+ipcMain.handle("trail:unlink", (_e, lineId) => canvasEdit((id) => trailStore.unlink(id, String(lineId))));
+// Group: the box drawn; it fits the cards whose centre is in it (24 px sides
+// and bottom, 48 px top). With no cards in it, the box as drawn.
+ipcMain.handle("trail:group", (_e, rect = {}) =>
+  canvasEdit((id) => {
+    const box = { x: Number(rect.x), y: Number(rect.y), w: Math.abs(Number(rect.w)), h: Math.abs(Number(rect.h)) };
+    const inside = trailStore.cardsIn(id, box);
+    const fit = inside.length
+      ? (() => {
+          const x1 = Math.min(...inside.map((c) => c.x)) - GROUP_SIDE, y1 = Math.min(...inside.map((c) => c.y)) - GROUP_TOP;
+          const x2 = Math.max(...inside.map((c) => c.x + c.w)) + GROUP_SIDE, y2 = Math.max(...inside.map((c) => c.y + c.h)) + GROUP_SIDE;
+          return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+        })()
+      : box;
+    return trailStore.group(id, { ...fit, label: "New group" });
+  }),
+);
+ipcMain.handle("trail:group-rename", (_e, groupId, label) => canvasEdit((id) => trailStore.renameGroup(id, String(groupId), String(label || ""))));
+// Question: a thread, shown as a question card where it was placed.
+ipcMain.handle("trail:question", (_e, { x, y, title } = {}) =>
+  canvasEdit((id) => {
+    const t = String(title || "").trim().slice(0, 200);
+    if (!t) return null;
+    return trailStore.questionCard(id, { id: `t${Date.now().toString(36)}`, title: t, status: "open", by: loadSettings().displayName || "", at: Date.now(), replies: [] }, { place: { x: Math.round(Number(x)), y: Math.round(Number(y)) } });
+  }),
+);
+ipcMain.handle("trail:note", (_e, { x, y, text } = {}) => canvasEdit((id) => trailStore.freeNote(id, { x: Number(x), y: Number(y), text, by: loadSettings().displayName || "" })));
+// A web search (B106): a search card on the trail and the results in a tab.
+// opts.tab: show the results in that tab (a search typed in a page's address
+// bar) instead of a new one. opts.private: a private tab, no card.
+ipcMain.handle("trail:search", (_e, query, opts = {}) => {
+  const q = String(query || "").trim();
+  if (!q) return null;
+  const url = SEARCH_URL + encodeURIComponent(q);
+  if (opts.private) return void createTab(url, { private: true });
+  const id = currentTrail();
+  research.saveNow();
+  const card = trailStore.searchCard(id, { query: q, url, near: canvasMiddle(id) });
+  if (card) sendUi("trail-changed", { trail: id, card: card.id });
+  const tab = opts.tab && tabs.get(String(opts.tab));
+  if (tab && !tab.private) {
+    tab.view.webContents.loadURL(url);
+    if (canvasOn) activateTab(tab.id);
+  } else createTab(url);
+  return card ? trailSnapshot(id) : null;
+});
+ipcMain.handle("trail:new", (_e, name) => {
+  changeTrail(() => research.create(name));
+  usage().count("sessions");
+  return trailSnapshot();
+});
+ipcMain.handle("trail:switch", (_e, id) => {
+  if (!trailStore.has(String(id))) return null;
+  changeTrail(() => research.switchTo(String(id)));
+  return trailSnapshot();
+});
+ipcMain.handle("trail:rename", (_e, name) => {
+  research.rename(name);
+  research.saveNow();
+  return trailSnapshot();
+});
+ipcMain.handle("trail:view", (_e, patch = {}) => trailStore.setView(research.current.id, patch || {}));
+ipcMain.handle("trail:timeline", (_e, id) => {
+  research.saveNow();
+  return trailStore.timeline(id ? String(id) : research.current.id);
+});
 ipcMain.handle("research:get", () => research.snapshot());
 ipcMain.handle("research:list", () => research.list().map((s) => ({ ...s, tabs: [...tabs.values()].filter((t) => t.trail === s.id && /^https?:/i.test(tabState(t).url)).length })));
 ipcMain.handle("research:new", (_e, name) => {
@@ -3574,6 +3905,15 @@ ipcMain.handle("usage:days", () => usage().daysUsed());
 ipcMain.handle("survey:open", () => createTab(require("./core/urls").SURVEY_URL));
 // The window's saved survey answer (node.survey), sent when it loads and on every change (B98).
 ipcMain.handle("survey:state", (_e, next) => setSurveyState(next, { fromWindow: true }));
+ipcMain.handle("canvas:show", () => showCanvas());
+// The canvas's survey section (B98): days of use when it should show, else 0;
+// and the choice made on it. Take survey opens the survey in a new tab.
+ipcMain.handle("survey:card", () => surveyCardDays());
+ipcMain.handle("survey:card-answer", (_e, act) => {
+  if (!["take", "never", "later"].includes(act)) return;
+  surveyCardAnswer(act);
+  if (act === "take") createTab(require("./core/urls").SURVEY_URL);
+});
 ipcMain.handle("usage:copy", () => {
   const text = usageSummary();
   clipboard.writeText(text);
@@ -3888,6 +4228,7 @@ async function releasePages() {
 
 app.on("before-quit", (e) => {
   try {
+    if (!pagesReleased && research) keepOpenTabs(currentTrail());
     research?.saveNow();
     historyStore?.saveNow();
   } catch (_) {}

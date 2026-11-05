@@ -15,7 +15,7 @@ Last updated: 2026-10-14 (0.9.0). Earlier sections describe the 2026-10-10 share
 | `core/agent.js` | Research agent: searches, reads, gap round, follow-ups, report |
 | `core/talk.js` | Talk: Hacker News and Bluesky discussions of a page |
 | `core/google.js` | Which addresses open in the Google window |
-| `renderer/start.html`, `error.html`, `google-tab.html` | New tab page, failed-load and crashed-tab page, Google window placeholder |
+| `renderer/error.html`, `google-tab.html` | Failed-load and crashed-tab page, Google window placeholder |
 | `renderer/fonts/` | Barlow and JetBrains Mono (OFL) |
 | `.github/workflows/` | Tests on push; installers on version tags |
 
@@ -174,6 +174,87 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 | `adblock` | `adblock.js` request listener skips blocking for tabs whose rule says `false` |
 | `extract.include` / `extract.skip` | Passed into the extraction script; include text is scored with weight 3 (`focus` field), skip selectors are added to the ignored areas. Invalid selectors are dropped |
 
+## Trail store (B100)
+
+`core/trail.js` holds trails for the trail canvas (phase 4.T, engineering handoff). A trail is one line of research and one tab group. `TrailStore` takes a storage object like the other core modules; on desktop it is `userData/trails/`:
+
+| File | Contents |
+| --- | --- |
+| `trails/index.json` | Trail ids, most recently used first; the current trail; when sessions were migrated |
+| `trails/<id>/trail.json` | The trail (`id`, `name`, `mono`, `createdAt`, `lastAt`, `readonly`, `from`, `file`, `note`, `startHere`), its cards, groups and lines, and the data the suggestions sidebar keeps (`research`: pins, opened and hidden results, reports, captures, share history, agent calls) |
+| `trails/<id>/events.jsonl` | Append-only event log, one JSON object per line: `id`, `at`, `device`, `actor`, `type`, and `card`, `line`, `group` or `data`. Types: opened, bounced, captured, asked, reported, noted, placed, removed, linked, unlinked, grouped, renamed, resolved, moved. A half-written last line (a crash) is skipped |
+| `trails/<id>/view.json` | Where the canvas was left: `x`, `y`, `z` (20%–250%), `selected`, `openTabs`, `mosaic`. Not shared |
+| `trails/<id>/files/` | Screenshots and audio. They never leave the computer |
+
+- **Cards:** `id`, `kind` (page, video, capture, report, question, note, voice, search), `x`, `y`, `w`, `h` (world coordinates at 100% zoom), `pinned` (moved by the person; auto-layout never moves it again), and fields by kind. A removed card keeps `removed: true`, its events and its lines; putting it back restores them. Sign-in, account and payment pages never become cards (B66).
+- **Groups and lines:** a card belongs to the group its centre sits in (no stored membership). Lines have `kind` nav, auto, you or suggested and a label (supports, contradicts, answers, raises or none). Link, group, rename and resolve are recorded as events with their own times; Replay (B110) depends on it.
+- **Timeline:** built from the log. Sessions are events grouped by device, with a new session after a 30-minute gap; newest first. A page with no card is "timeline only".
+- **Migration:** on the first start, each file in `sessions/` becomes a trail with the same id (the old files stay). Each page read becomes an opened event. Sessions did not record time on page, so a page becomes a card when the recorded signals show engagement: 20 s or more between the first and last time NODE read it (NODE reads a page again only after scrolling, selecting or coming back), read twice or more, a note on it, a thread that links it, or its tab still open in that trail. Other pages stay timeline-only, marked as having no recorded time on page. Threads become question cards, page notes note cards (linked to their page), reports report cards and captures capture cards, laid out in rows of four. NODE opens on the session that was current.
+- **research:\* on top:** `sessionStorageOver(store)` is a storage object for `ResearchStore`: `<id>.json` is a session view of a trail, `current.txt` is the current trail. Every research:\* channel (suggestions sidebar, threads, notes, share files, MCP sessions) keeps working, and its writes land in the trail store as events and cards. This stays until the old sidebar is gone.
+- **IPC:** `trail:get` (cards, groups, lines, timeline, view of a trail), `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view` (save position, zoom, selection), `trail:timeline`.
+- **Storage:** `fs-storage.js` makes folders for names with "/", writes through a temporary file and rename, and has `append()` for the event log.
+
+## Trail canvas (B101)
+
+`renderer/canvas.js` draws one trail from `trail:get`. It is the renderer side only: it reads the trail and saves the view; it does not change cards (that comes with B104 and B105).
+
+- **Layers:** the viewport holds a dot grid layer and one world layer. The world layer holds groups, lines (one SVG), line labels and cards, each placed by `transform` in world pixels (100% zoom). The view is `{ x, y, z }`; a world point shows at `x + wx * z`. Pan and zoom change only the two layers' transforms, so they stay on the compositor. The world layer gets `will-change: transform` while it moves and loses it 160 ms after, so text is drawn sharp at the new zoom.
+- **Input:** two-finger scroll pans; pinch (ctrl-wheel) and ⌘-wheel zoom at the pointer, 20% to 250%; dragging the background pans; arrow keys pan; ⌘+ ⌘− zoom; ⌘0 fits. Click selects a card, double-click or Enter opens its page (the open tab if there is one).
+- **Fit and the zoom buttons** fly to the new view in 320 ms (ease-out, transform only); with reduced motion they jump. Fit never zooms past 100%.
+- **Dot grid:** 1.25 px dots in `--canvas-dot`, 24 px apart at 100%; below 50% every other dot is left out.
+- **Lines:** opened from (1.5 px grey with an arrow), captured or reported from (1 px dotted grey), drawn (2 px white with end dots), suggested (2 px dashed violet). Each leaves its cards 6 px from the edge. A line key sits bottom left.
+- **Minimap:** 180 × 116, bottom right, with groups, cards and the visible area; click or drag to move there.
+- **Previews:** `trail:previews` gives `{ url: { thumb, tabId } }` for the current trail's open tabs, using the same pictures as the tab overview (`thumbOf`). Kept in memory only. Those cards show the picture and a Tab mark.
+- **Saving:** the position, zoom and selection go to `trail:view` 400 ms after the last change.
+- **Start page and new tabs (B102):** the canvas sits in the page area, right of the sidebar. `showCanvas()` in `main.js` sets `canvasOn`, takes pictures of the pages on screen, hides every page view and tells the window (`canvas` command). NODE opens on it (after restoring tabs in the background); ⌘T, the + button and `tab:create` without an address show it with its search bar focused; closing the last page tab comes back to it; switching trails from it shows the other trail's canvas. It is first in the tab list (⌘1; ⌘2 to ⌘8 are the page tabs, ⌘9 the last). ⌘E goes from a page to the canvas with that page's card selected, and from the canvas back to the page. `activateTab` and opening a tab in front leave it. `activeId` keeps the last page tab while the canvas shows. `tab:navigate` to a tab that does not exist opens a new tab. While the canvas shows, the renderer does not read the hidden page (`crawlViewport`), so a tab opened behind the canvas is not recorded in the trail until it is shown.
+- **Search bar, survey, empty trail:** an address or search typed in the canvas's search bar (or the address bar while the canvas shows) opens in a new page tab; B106 adds find in trail, search cards and Ask. The beta survey (B98) is a section under the search bar (`survey:card`, `survey:card-answer`). A trail with no cards shows "What are you looking into?" and "Pick up where you left off" with the other trails. There is no custom new tab address and no Most visited; `renderer/start.html` is gone.
+- **Tokens:** `--canvas-group`, `--canvas-group-line`, `--canvas-dot` in `renderer/styles.css`, with light values under `:root[data-theme="light"]` for when NODE has a light theme. No other colour values.
+- **Tests:** `test/canvas-demo.js` (`npm run test:canvas`) checks the view maths; `test/e2e/42-trail-canvas.js` checks the drawing, pan, zoom, Fit, saving and frame times with 220 cards.
+
+## Pages becoming cards (B104)
+
+- **When:** a page becomes a card when the person engages with it: 20 s on screen (the shown tab or a Mosaic tile, with NODE's window in front, counted once a second in `main.js`), a scroll by hand of more than half a screen (`view-preload.js` sends `tab:engaged`; scrolls within a second of a wheel, touch or key count, the page's own scrolling does not), a capture from it, an Ask about it, or its tab still being open when the person leaves the trail (switches trails or quits; agreed with Sven). Private tabs never count. A visit that ends without any of these is recorded as a `bounced` event with its time on page, and the timeline shows it as timeline-only with that time.
+- **Where:** `core/placement.js` `placeNear(view, source, w, h)`. The source is the page it was opened from (the page before it in the tab, or the page that opened the tab). Inside the source's group: the free spot nearest the source (24 px sides and bottom, 48 px top). Group full: the group grows at the bottom, and every group and card that starts below it moves down by the same amount; pinned cards never move. Source not in a group: right of it, below, left, above, then the corners, then the nearest free spot. No source: the free spot nearest the middle of the canvas as last seen. No overlaps. The new card gets an "opened from" line from its source.
+- **Store:** `TrailStore.placePage(id, url, opts)` adds the card (or puts a removed one back) and its line; `TrailStore.bounce(id, url, dwell)` records a short visit. Group growth and moved cards are saved with the trail; they are not events.
+- **Put on canvas / Remove from canvas:** `trail:place` ({ url } or { card }, with x, y when dropped) and `trail:remove`. In the sidebar a timeline-only row has a + button and can be dragged onto the canvas. On the canvas the selected card shows Open and Remove from canvas. A removed card keeps its events and lines; putting it back brings them back.
+- **New cards:** cards placed since the person last saw that trail's canvas have a violet border until selected (the time is kept per trail in the window's storage). `main.js` sends `trail-changed` when a card is placed, and the canvas and timeline draw again.
+
+## Canvas tools (B105)
+
+- **Toolbar** at the bottom of the canvas: Select (V), Hand (H), Group (G), Link (L), Question (Q), Note (N). The keys work on the canvas when no field has the cursor. Every tool goes back to Select after one action; Esc leaves a tool, then clears the selection. Tools are off for read-only trails (opened files).
+- **Select:** click a card to select it; drag it to move it (the card is pinned: auto-layout never moves it again); shift-click to select several, which shows "n selected · View in Mosaic" (those pages become the Mosaic tiles, opened in tabs when needed). Drag a group's name to move the group and its cards (they are pinned too); double-click the name to rename it. Drag the background to pan.
+- **Link:** drag from one card to another to draw a line (kind `you`); the label menu opens on it: Supports, Contradicts, Answers, Raises, No label, Remove link. Clicking a drawn line's label (or the dot where it would be) opens the menu again. Drawing over a grey line keeps the grey line (one line per pair and kind).
+- **Group:** drag a box; the group fits the cards whose centre is in it (24 px sides and bottom, 48 px top), or keeps the box when it has none. The name field opens: Enter names it, Esc keeps "New group".
+- **Question and Note:** click to place, type; Enter adds (Shift+Enter is a new line in a note), Esc cancels; empty ones are not kept. A question is a thread (it shows in Threads); a note made on the canvas is not tied to a page.
+- **Store and IPC:** `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`. Each writes to the trail store (new: `moveGroup`, `labelLine`, `freeNote`), records an event with its own time (moved, linked, unlinked, grouped, renamed, asked, noted), then reads the session again (`ResearchStore.reload()`) so the sidebar, threads and later session saves see the change, and returns the new snapshot for the canvas.
+
+## Canvas search bar (B106)
+
+- **Find in trail:** typing in the canvas search bar keeps the cards whose title, text, address, keywords or query contain every word, outlined, and dims the rest; the list under the bar says how many match. Esc clears it.
+- **What Enter does,** listed under the bar (↑↓ to choose): an address opens in a new tab; otherwise Search the web (default), Ask about this trail, or Private search.
+- **Search the web** (`trail:search`): adds a search card titled "Search: <query>" (kind `search`, with the Brave Search address; its foot says "Open results from Brave"), placed near the middle of the canvas, and opens the results in a tab. Pages opened from the results go next to the search card with "opened from" lines (`TrailStore.searchCardFor` matches the results page by address or query). A search typed in the sidebar's address bar adds a search card too, and shows the results in that tab (or a new one on the canvas).
+- **Ask about this trail:** the Ask pane with the "Research session" scope (the trail's pages) and the question sent.
+- **Private search:** the results in a private tab; no card.
+
+## Zoom ladder and Gallery (B107)
+
+- **Ladder:** `core/ladder.js` (no platform imports; the window loads it too as `NodeLadder`). Levels: page → Mosaic → Gallery → canvas. A trackpad pinch that zooms out (fingers together, "pinch in" in B72's words) climbs one level; one that zooms in goes back down. One level per gesture: a gesture ends after 400 ms without wheel events (`Gesture`). On a page, a pinch that starts on a zoomed page, or zooms in at 100%, zooms the page instead; ⌘+ and ⌘− also zoom the page. On the canvas a pinch zooms the canvas (B101), so the ladder stops there. `main.js` `onPinch` and `goLevel`; `layout:ladder` sets a level.
+- **Gallery** (the B71 tab overview, renamed): every open tab in the trail, 4 across. Click chooses ("n chosen"), View in Mosaic shows the chosen tabs as tiles (none chosen: Mosaic's usual tabs), double-click opens the page, ✕ closes the tab, Esc or Cancel changes nothing. Opened from Mosaic it starts with the Mosaic's tabs chosen (`galleryChoice`: the chosen tiles, or the tabs Mosaic shows). Pinch in goes on to the canvas, pinch out back to Mosaic.
+- **Mosaic tool** (and ⇧⌘M): with no tabs chosen it opens the Gallery to choose (with one tab, Mosaic as before).
+- **Group "Mosaic · n":** a group with two or more pages has this button above its right edge; it shows those pages as tiles.
+- View in Mosaic from the Gallery over the canvas leaves the canvas; ⌘1 to ⌘4 pick tiles only while Mosaic is on screen.
+
+## Sidebar-only chrome (B103)
+
+The sidebar is NODE's only chrome; the top bar and the layout setting are gone (`chromeLayout` is always `side`; an old `top` value is ignored). `renderer/index.html` keeps the real controls in the hidden header, and `placeSidebar()` in `app.js` moves them into the sidebar's slots at start, so each keeps its handlers.
+
+- **Order, top to bottom:** trail switcher (monogram and name, a dot per trail, the menu), Back, Forward and Reload with the shield and bookmark star, the address bar (a plain field; ⌘L still opens the CommandBar), tabs (the canvas first, then the trail's page tabs), timeline (the trail's sessions from `trail:timeline`, newest first; timeline-only pages marked), the tool grid (4 × 2, 52 px tiles: Mosaic, Capture, Suggest, Sound, Private, Open, History, Menu; Mosaic and Sound on in violet), and the media strip. 300 px wide, no resizing, no rail.
+- **Switcher:** the menu lists the trails, New trail, Continue from phone (disabled until sync, B111), Open trail file… (⌘O) and Private tab. A two-finger sideways swipe on the sidebar (one trail per gesture; a gesture ends after 400 ms without wheel events), a drag across the switcher, or a dot changes trail. Another trail's dot turns green while media plays in its tabs (`trail:list` gives `playing`).
+- **Agent, downloads and full screen** buttons sit in the Menu's header.
+- **Pages fill the window.** `contentRect()` gives pages, Mosaic and private tabs the whole window left of the suggestions widget. The window's own sidebar is under them.
+- **The sidebar over pages:** `main.js` polls the pointer every 50 ms while a page, Mosaic or a private tab shows (`updateSidePoll`, run by `applyLayout`). Within 8 px of the window's left edge, `setSideShown(true)` attaches the overlay layer (`chrome-overlay.html`, now a copy of the sidebar, 300 px wide) above the pages; it slides in over 200 ms (`--motion-base`, `--ease-enter`) and out faster (`--motion-fast`, `--ease-exit`); no slide with reduced motion. It leaves 250 ms after the pointer leaves it. ⌘S (View > Show Sidebar), `layout:side-over` and a field focused with a key bring it too and keep it until the pointer has been over it and left. The window sends the layer a copy of the sidebar every 120 ms while it shows (`sendMirror`); clicks and typing in the copy go back to the real sidebar by element path (`overlayEvent`). On the canvas, in the Menu or the CommandBar the layer is not used.
+- **Private tabs (handoff spec 9):** ⌘⇧N, the Private tile or the switcher menu (`tab:private`). Each has its own in-memory session (`session.fromPartition("private-<id>")`, with the permission handlers, ad blocking and downloads set up), no trail (it shows in every trail's tab list), and a violet mark. Its pages go into no history, no trail and no suggestions; it is not saved with the tabs or offered by Reopen Closed Tab. Its first page is `renderer/private.html`.
+
 ## Research sessions
 
 `core/research.js` keeps one current session and saves each as `<id>.json` (plus `current.txt`) through a storage object; on desktop that is the `sessions/` folder. The renderer records a page in the trail each time NODE actually searches for it (not on every 5-second check), with its top 5 keywords. Start pages and search-results pages are skipped. Pins are saved with the session after it has loaded at startup. "Recurring keywords" are keywords that appear on more than one page in the session. Export writes Markdown to `library/saves/` and adds it to the Library index.
@@ -194,7 +275,8 @@ All in Electron's `userData` folder:
 | `permissions.json` | Remembered permission answers per site |
 | `rules.json` | Site rules (created with examples on first run) |
 | `history.json` | Visited pages |
-| `sessions/` | Research sessions, one JSON file each, and `current.txt` |
+| `trails/` | Trails (B100): one folder per trail; see Trail store |
+| `sessions/` | Research sessions from before 0.10, one JSON file each, and `current.txt`. Copied into `trails/` on the first start and kept |
 | `library/` | `screenshots/`, `saves/`, `media/` and `index.json` |
 
 The renderer stores hidden keywords and the Auto setting in local storage.
@@ -203,12 +285,13 @@ The renderer stores hidden keywords and the Auto setting in local storage.
 
 | Group | Channels |
 | --- | --- |
-| Tabs | `tab:create`, `tab:close`, `tab:activate`, `tab:navigate`, `tab:back`, `tab:forward`, `tab:reload`, `tab:audio`, `tab:audio-reset`, `tab:clicked`, `tab:hotkey`, `tab:activity`, `tab:gesture`, `tab:order`, `tab:pip`, `audio:all` |
+| Tabs | `tab:create`, `tab:private`, `tab:close`, `tab:activate`, `tab:navigate`, `tab:back`, `tab:forward`, `tab:reload`, `tab:audio`, `tab:audio-reset`, `tab:clicked`, `tab:hotkey`, `tab:activity`, `tab:gesture`, `tab:order`, `tab:pip`, `audio:all` |
 | Bookmarks and Ask AI | `bookmarks:search`, `bookmarks:has`, `bookmarks:toggle`, `bookmarks:remove`, `ai:ask`, `ai:chat-info` |
-| Layout | `layout:set`, `layout:sidebar`, `layout:library` |
+| Layout | `layout:set`, `layout:ladder`, `layout:sidebar`, `layout:library`, `layout:chrome` (sidebar width), `layout:side-over` (sidebar over the page) |
 | Find, zoom, history | `find:start`, `find:stop`, `tab:zoom`, `history:search`, `history:clear`, `history:remove` |
 | Site rules | `rules:edit`, `rules:reload` |
-| Research session | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
+| Trail store | `trail:get`, `trail:list`, `trail:new`, `trail:switch`, `trail:rename`, `trail:view`, `trail:timeline`, `trail:previews`, `trail:place`, `trail:remove`, `trail:move`, `trail:group-move`, `trail:link`, `trail:link-label`, `trail:unlink`, `trail:group`, `trail:group-rename`, `trail:question`, `trail:note`, `trail:search`; `tab:engaged` (page → main) |
+| Research session (over the trail store) | `research:get`, `research:list`, `research:new`, `research:switch`, `research:rename`, `research:pins`, `research:visit`, `research:opened`, `research:dismiss`, `research:undismiss`, `research:export` |
 | Keywords and search | `page:extract`, `page:keywords`, `suggest:search` (legacy, used by Tauri), `suggest:for`, `suggest:preview` |
 | Sources and AI | `settings:get`, `settings:set`, `search:status`, `search:test`, `ai:test` |
 | Library | `library:root`, `library:list`, `library:remove`, `library:open-folder`, `library:reveal`, `library:shot`, `library:save`, `library:grab` |

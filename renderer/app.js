@@ -184,12 +184,19 @@ function renderTabs() {
     runFind(true, false);
   }
   tabsEl.innerHTML = "";
+  // The trail's canvas sits before the page tabs (⌘1) and cannot close.
+  const cvTab = document.getElementById("canvas-tab");
+  cvTab.hidden = !api?.canvasShow;
+  cvTab.classList.toggle("active", Boolean(canvasShown));
+  cvTab.setAttribute("aria-current", canvasShown ? "page" : "false");
   for (const t of tabs) {
     const el = document.createElement("div");
-    el.className = "tab" + (t.id === activeId ? " active" : "") + (t.sleeping ? " asleep" : "") + (t.audible && !t.muted ? " playing" : "") + (typeof mosaicShown !== "undefined" && mosaicShown.includes(t.id) ? " in-mosaic" : "");
+    el.className = "tab" + (t.private ? " private" : "") + (t.id === activeId && !canvasShown ? " active" : "") + (t.sleeping ? " asleep" : "") + (t.audible && !t.muted ? " playing" : "") + (typeof mosaicShown !== "undefined" && mosaicShown.includes(t.id) ? " in-mosaic" : "");
     if (t.sleeping) el.title = "Asleep to save memory. Opens again when you click it.";
     // The monogram shows only in the sidebar layout (the rail shows nothing else).
-    el.innerHTML = `<span class="mono" aria-hidden="true">${escapeHtml(monogram(t.title, t.url))}</span><span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
+    el.innerHTML = t.private
+      ? `<span class="mono" aria-hidden="true">${icon("shield")}</span><span title="Not in any trail · no history">${escapeHtml(t.url ? t.title || "Private tab" : "Private tab")}</span><i class="pv">Private</i>`
+      : `<span class="mono" aria-hidden="true">${escapeHtml(monogram(t.title, t.url))}</span><span title="${escapeHtml(t.url || "")}">${escapeHtml(t.title || "New tab")}</span>`;
     if (document.body.classList.contains("sb-rail")) el.title = `${t.title || "New tab"}${t.sleeping ? " · asleep" : ""}${t.audible && !t.muted ? " · playing" : ""}`;
     if (t.tile) {
       // Chosen for Mosaic (B69).
@@ -304,8 +311,10 @@ function renderTabs() {
     omniTabId = activeId; // switching tabs drops what was typed for the old tab
     omniTyping = false;
   }
-  if (current && (!omniTyping || document.activeElement !== omni)) {
-    if (omni.value !== (current.url || "")) omni.value = current.url || "";
+  // On the canvas (B102) there is no page: the address bar is empty.
+  const shownUrl = canvasShown ? "" : current?.url || "";
+  if ((current || canvasShown) && (!omniTyping || document.activeElement !== omni)) {
+    if (omni.value !== shownUrl) omni.value = shownUrl;
     omniTyping = false;
   }
 }
@@ -803,6 +812,13 @@ async function crawl() {
 async function crawlViewport(reason) {
   const tab = tabs.find((t) => t.id === activeId);
   if (!tab) return;
+  // On the canvas no page is being read (B102): nothing to record or suggest from.
+  if (canvasShown && reason !== "manual") return;
+  // A private tab (B103) is in no trail: never read, recorded or searched from.
+  if (tab.private) {
+    statusEl.textContent = "A private tab: not in any trail, no history. NODE does not suggest from it.";
+    return;
+  }
   if (!api) {
     auto = deriveKeywords({ names: [tab.title] }).map((term) => ({ term }));
     renderKeys();
@@ -948,7 +964,12 @@ omniForm.addEventListener("submit", (e) => {
   e.preventDefault();
   omniTyping = false;
   omni.blur();
-  if (api && activeId) api.navigate(activeId, omni.value);
+  const typed = omni.value.trim();
+  // A search typed in the address bar adds a search card (B106); an address opens.
+  const isSearch = typed && !/^[a-z][a-z0-9+.-]*:\/\//i.test(typed) && !/^localhost(:\d+)?(\/|$)/i.test(typed) && (typed.includes(" ") || !typed.includes("."));
+  if (api?.trailSearch && isSearch && !tabs.find((t) => t.id === activeId)?.private) api.trailSearch(typed, { tab: canvasShown ? "" : activeId });
+  else if (api && canvasShown) api.createTab(typed); // on the canvas: a new tab
+  else if (api && activeId) api.navigate(activeId, typed);
   else demoNavigate(omni.value);
 });
 
@@ -992,6 +1013,8 @@ layoutBtn.addEventListener("contextmenu", (e) => {
   openOverview();
 });
 layoutBtn.addEventListener("click", async () => {
+  // Mosaic with nothing chosen opens the Gallery to choose (B107).
+  if (layout !== "mosaic" && !tabs.some((t) => t.tile) && tabs.length > 1) return openOverview();
   const next = layout === "mosaic" ? "focus" : "mosaic";
   layout = api ? await api.setLayout(next) : next;
   paintLayout(true);
@@ -1517,11 +1540,9 @@ async function renderSources() {
   fillGoogleState(settings.googleWindow);
   fillAgents(settings.agents);
   document.getElementById("restore-tabs").checked = settings.restoreTabs !== false;
-  document.getElementById("start-page").value = settings.startPage || "";
   document.getElementById("display-name").value = settings.displayName || "";
   document.getElementById("mosaic-max").value = String(settings.mosaicMax ?? 4);
   document.getElementById("tab-sleep").value = String(settings.tabSleep ?? 30);
-  document.getElementById("chrome-layout").value = settings.chromeLayout === "side" ? "side" : "top";
   document.getElementById("auto-update").checked = settings.autoUpdate !== false;
   document.getElementById("passkeys").checked = settings.passkeys === true;
   document.getElementById("passkeys").closest(".top").hidden = document.getElementById("passkeys-help").hidden = !/Mac/.test(navigator.platform);
@@ -1965,7 +1986,6 @@ async function saveSources(rerender = true) {
   await api.setSettings({ ...sourcesDraft, ai: aiDraft(), adblock: document.getElementById("adblock-enabled").checked, adblockCookies: document.getElementById("adblock-cookies").checked,
     google: { mode: document.getElementById("google-mode").value, browser: document.getElementById("google-browser").value },
     restoreTabs: document.getElementById("restore-tabs").checked,
-    startPage: document.getElementById("start-page").value,
     displayName: document.getElementById("display-name").value,
     mosaicMax: Number(document.getElementById("mosaic-max").value),
     tabSleep: Number(document.getElementById("tab-sleep").value),
@@ -3705,7 +3725,8 @@ function paintChrome(msg) {
 // (moved out of view) and sends the layer a copy of it whenever it changes;
 // the layer sends clicks and typing back here. Elements are matched by their
 // position under the toolbar.
-const chromeHeader = document.querySelector("header.chrome");
+// Since B103 the copy is of the sidebar (the only chrome), shown over pages.
+const chromeHeader = document.getElementById("sidebar");
 let mirrorTimer = null;
 let mirrorLast = "";
 let spriteSent = false;
@@ -3742,7 +3763,8 @@ function mirrorWhileImmersive(on) {
 // A field in the real toolbar got focus in full screen (Cmd+L, Cmd+F, Tab):
 // type in the layer's copy instead, which is the one on screen.
 chromeHeader.addEventListener("focusin", (e) => {
-  if (!document.body.classList.contains("immersive") || e.target.tagName !== "INPUT" || !api?.focusOverlayField) return;
+  // Over a page (B103) the sidebar here is under the page: type in the copy.
+  if (canvasShown || e.target.tagName !== "INPUT" || e.target.id === "omni" || menuOpen || !api?.focusOverlayField) return;
   const path = headerPath(e.target);
   sendMirror();
   e.target.blur();
@@ -3760,8 +3782,8 @@ function overlayEvent(ev) {
     if (ev.key === "Enter" && el.form) el.form.requestSubmit();
     else el.dispatchEvent(new KeyboardEvent("keydown", { key: ev.key, bubbles: true, cancelable: true, ...mods }));
   } else if (["click", "dblclick", "auxclick", "contextmenu"].includes(ev.type)) {
-    // The real toolbar sits one toolbar-height above the window in full screen.
-    const y = (ev.y || 0) - chromeHeader.offsetHeight;
+    // The copy sits where the sidebar is, so positions match.
+    const y = ev.y || 0;
     el.dispatchEvent(new MouseEvent(ev.type, { bubbles: true, cancelable: true, button: ev.button || 0, detail: ev.detail || 1, clientX: ev.x || 0, clientY: y, ...mods }));
   }
   sendMirror();
@@ -3775,18 +3797,129 @@ api?.onCommand?.((msg) => {
   else if (msg.cmd === "open-menu") {
     openMenu(msg.section || menuSection).then(() => msg.box && setTimeout(() => (document.getElementById(msg.box)?.previousElementSibling || document.getElementById(msg.box))?.scrollIntoView({ block: "start" }), 300));
   } else if (msg.cmd === "passwords-changed") renderPasswords().catch(() => {});
-  else if (msg.cmd === "overview") openOverview();
-  else if (msg.cmd === "sidebar-toggle") toggleSidebar();
-  else if (msg.cmd === "sidebar-rail") chromeLayout === "side" && setSideState(sideState === "rail" ? "full" : "rail");
-  else if (msg.cmd === "chrome-layout") applyChromeLayout(msg.mode);
+  else if (msg.cmd === "overview") openOverview({ fromMosaic: msg.fromMosaic });
   else if (msg.cmd === "tour") startTour();
+  else if (msg.cmd === "canvas") (msg.open ? openCanvas(msg) : closeCanvas());
+  else if (msg.cmd === "side-over") mirrorWhileImmersive(msg.shown);
+  else if (msg.cmd === "trail-changed") refreshCanvasData();
+  else if (msg.cmd === "session-reloaded") api.researchGet?.().then((s) => s && adoptSession(s));
 });
 
-// ---- Tab overview (B71) ----
-// Zoom out to every open tab and pick which ones Mosaic shows, like selecting
-// photos: click (or Space) picks or unpicks a tab, Done shows the picked tabs
-// in Mosaic, Esc or Cancel leaves everything as it was. None picked + Done:
-// Mosaic shows its usual tabs (the first ones and the current one).
+// ---- Trail canvas (B101, B102) ----
+// The current trail's cards, groups and lines (renderer/canvas.js), in the
+// page area. It is the start page and every new tab: NODE opens on it, ⌘T and
+// the + button show it with the search bar ready, closing the last page tab
+// comes back to it, and it is first in the tab list (⌘1). ⌘E goes from a page
+// to its card and back. main.js decides when it shows (showCanvas).
+const canvasEl = document.getElementById("canvas");
+let trailCanvas = null;
+var canvasShown = false; // var: renderTabs reads it before this line runs
+let canvasSeq = 0;
+async function openCanvas({ focus = false, select = "" } = {}) {
+  if (!api?.trailGet) return;
+  const seq = ++canvasSeq;
+  trailCanvas ||= new TrailCanvas(canvasEl, api, {
+    open: (card, tab) => (tab?.tabId ? api.activateTab(tab.tabId) : api.createTab(card.url)),
+    search: (text) => api.createTab(text),
+    pickTrail: (id) => api.trailSwitch(id),
+    // B104: Put on canvas (a timeline row dropped on it) and Remove from canvas.
+    put: async (o) => (await api.trailPlace(o)) && refreshCanvasData(),
+    remove: async (id) => (await api.trailRemove(id)) && refreshCanvasData(),
+    // B105: canvas tools. Each returns { result, snap } for the canvas to draw.
+    move: (id, x, y) => api.trailMove(id, x, y),
+    groupMove: (id, x, y) => api.trailGroupMove(id, x, y),
+    link: (from, to) => api.trailLink(from, to),
+    linkLabel: (line, label) => api.trailLinkLabel(line, label),
+    unlink: (line) => api.trailUnlink(line),
+    group: (rect) => api.trailGroup(rect),
+    groupRename: (id, label) => api.trailGroupRename(id, label),
+    question: (o) => api.trailQuestion(o),
+    note: (o) => api.trailNote(o),
+    // "n selected · View in Mosaic": the pages of the chosen cards, as tiles.
+    mosaic: (ids) => viewInMosaic(ids),
+    // B106: the search bar's choices.
+    webSearch: (q) => api.trailSearch(q),
+    privateSearch: (q) => api.trailSearch(q, { private: true }),
+    ask: (q) => askAboutTrail(q),
+  });
+  const wasShown = canvasShown;
+  canvasShown = true;
+  canvasEl.hidden = false;
+  renderTabs();
+  if (focus) trailCanvas.focusSearch();
+  const [previews, snap, list, days] = await Promise.all([
+    api.trailPreviews?.().catch(() => ({})),
+    api.trailGet(),
+    api.trailList?.().catch(() => []),
+    api.surveyCard?.().catch(() => 0),
+  ]);
+  if (seq !== canvasSeq || !canvasShown) return;
+  // Cards placed since the canvas was last seen show as new (B104).
+  const seenKey = `node.canvasSeen.${snap?.trail.id}`;
+  if (!wasShown || canvasSeenTrail !== snap?.trail.id) {
+    canvasSeenAt = Number(store.get(seenKey, 0)) || 0;
+    canvasSeenTrail = snap?.trail.id;
+  }
+  store.set(seenKey, Date.now());
+  trailCanvas.show(snap, previews || {}, { seenAt: canvasSeenAt });
+  trailCanvas.setSurvey(days || 0);
+  trailCanvas.setResume((list || []).filter((t) => t.id !== snap?.trail.id && t.cards > 0));
+  if (select) trailCanvas.selectUrl(select);
+  if (focus) trailCanvas.focusSearch();
+  else if (!canvasEl.contains(document.activeElement)) trailCanvas.vp.focus({ preventScroll: true });
+}
+// Shows the pages of the chosen cards in Mosaic: their open tabs, or new tabs.
+async function viewInMosaic(ids) {
+  const cards = (trailCanvas?.data?.cards || []).filter((c) => ids.includes(c.id) && c.url);
+  if (!cards.length) return;
+  const chosen = [];
+  for (const c of cards) {
+    const open = tabs.find((t) => t.url === c.url);
+    chosen.push(open ? open.id : await api.createTab(c.url));
+  }
+  for (const t of tabs) if (t.tile && !chosen.includes(t.id)) await api.setTabTile(t.id, false);
+  for (const id of chosen) if (id) await api.setTabTile(id, true);
+  layout = await api.setLayout("mosaic");
+  paintLayout(true);
+}
+// Ask about this trail (B106): the Ask pane, reading the trail's pages.
+async function askAboutTrail(q) {
+  askScope = "session";
+  if (!panelOpen) setPanelOpen(true, { animate: true });
+  await openAsk();
+  sendAsk(q);
+}
+var canvasSeenAt = 0;
+var canvasSeenTrail = "";
+// The trail changed in main (a page became a card): draw it again if shown,
+// and update the timeline.
+async function refreshCanvasData() {
+  if (typeof refreshTimeline === "function") refreshTimeline(true);
+  if (!canvasShown || !trailCanvas) return;
+  const [previews, snap] = await Promise.all([api.trailPreviews?.().catch(() => ({})), api.trailGet()]);
+  if (!canvasShown) return;
+  const keep = { ...trailCanvas.v };
+  trailCanvas.show(snap, previews || {}, { seenAt: canvasSeenAt });
+  trailCanvas.setView(keep, { save: false });
+}
+function closeCanvas() {
+  canvasSeq++;
+  canvasShown = false;
+  canvasEl.hidden = true;
+  renderTabs();
+}
+document.getElementById("canvas-tab").addEventListener("click", () => api?.canvasShow?.());
+canvasEl.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && e.target === trailCanvas?.vp) trailCanvas.select(null);
+});
+
+// ---- The Gallery (B71 tab overview, B107) ----
+// Every open tab in the trail as a picture, 4 across: click (or Space)
+// chooses a tab, "n chosen · View in Mosaic" shows the chosen tabs in Mosaic,
+// double-click opens the page, ✕ closes the tab, Esc or Cancel leaves
+// everything as it was. Opened from Mosaic, it starts with the Mosaic's
+// pages chosen. On the zoom ladder: pinch out goes on to the canvas, pinch in
+// back to Mosaic.
 const ovEl = document.getElementById("overview");
 const ovGrid = document.getElementById("ov-grid");
 const ovCount = document.getElementById("ov-count");
@@ -3808,7 +3941,7 @@ function hostOf(url) {
 function paintOverview() {
   if (typeof tourCheck === "function") setTimeout(tourCheck, 0);
   const full = ovMax && ovPicked.length >= ovMax;
-  ovCount.textContent = ovPicked.length ? `${ovPicked.length} of ${ovMax || "all"} picked` : ovMax ? `Pick up to ${ovMax}` : "Pick any tabs";
+  ovCount.textContent = ovPicked.length ? `${ovPicked.length} chosen` : ovMax ? `Choose up to ${ovMax}` : "Choose any tabs";
   ovCount.classList.toggle("full", Boolean(full));
   for (const card of ovGrid.children) {
     const on = ovPicked.includes(card.dataset.id);
@@ -3830,7 +3963,7 @@ function toggleOverviewPick(id) {
   paintOverview();
 }
 
-async function openOverview() {
+async function openOverview({ fromMosaic = false } = {}) {
   if (ovOpen || !api?.openOverview) return;
   if (menuOpen) await closeMenu();
   ovOpen = true;
@@ -3839,7 +3972,7 @@ async function openOverview() {
   holdChrome("overview", true);
   const r = await api.openOverview();
   ovMax = r.max;
-  ovPicked = r.tabs.filter((t) => t.tile).map((t) => t.id);
+  ovPicked = NodeLadder.galleryChoice({ tiles: r.tabs.filter((t) => t.tile).map((t) => t.id), shown: fromMosaic ? mosaicShown : [] });
   ovGrid.innerHTML = "";
   for (const t of r.tabs) {
     const card = document.createElement("div");
@@ -3876,7 +4009,21 @@ async function openOverview() {
       meta.lastChild.replaceWith(now);
     }
     card.setAttribute("aria-label", `${t.title || "New tab"}, ${hostOf(t.url)}`);
-    card.append(thumb, meta);
+    // ✕ closes the tab (B107).
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "ov-x";
+    x.textContent = "×";
+    x.title = "Close tab";
+    x.setAttribute("aria-label", `Close ${t.title || "tab"}`);
+    x.addEventListener("click", (e) => {
+      e.stopPropagation();
+      api.closeTab(t.id);
+      ovPicked = ovPicked.filter((id) => id !== t.id);
+      card.remove();
+      paintOverview();
+    });
+    card.append(thumb, meta, x);
     ovGrid.appendChild(card);
   }
   paintOverview();
@@ -3941,17 +4088,30 @@ ovGrid.addEventListener("click", (e) => {
   card.focus();
   toggleOverviewPick(card.dataset.id);
 });
-ovGrid.addEventListener("dblclick", (e) => {
-  // Double-click: pick the tab (if it is not picked yet) and finish.
+ovGrid.addEventListener("dblclick", async (e) => {
+  // Double-click opens the page (B107).
   const card = e.target.closest(".ov-card");
-  if (card && !ovPicked.includes(card.dataset.id)) toggleOverviewPick(card.dataset.id);
-  if (card) closeOverview(true);
+  if (!card) return;
+  const id = card.dataset.id;
+  await closeOverview(false);
+  api.activateTab(id);
+  if (layout === "mosaic") {
+    layout = await api.setLayout("focus");
+    paintLayout(true);
+  }
 });
 document.getElementById("ov-done").addEventListener("click", () => closeOverview(true));
 document.getElementById("ov-cancel").addEventListener("click", () => closeOverview(false));
 document.getElementById("ov-clear").addEventListener("click", () => {
   ovPicked = [];
   paintOverview();
+});
+// Esc closes the Gallery even when the focus left it (a closed tab's card).
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && ovOpen && !ovEl.contains(e.target)) {
+    e.preventDefault();
+    closeOverview(false);
+  }
 });
 ovEl.addEventListener("keydown", (e) => {
   const cards = [...ovGrid.children];
@@ -4115,22 +4275,22 @@ async function maybeTourPrompt(afterSetup = false, tries = 0) {
 }
 setTimeout(() => maybeTourPrompt().catch(() => {}), 2500);
 
-// Trackpad pinch in the tab overview: pinch out = Done (B72). The overview is
-// part of this window, so its pinches arrive here, not through a page.
+// Trackpad pinch in the Gallery, one level per gesture (B107, core/ladder.js):
+// pinch in goes back to Mosaic with the chosen tabs; pinch out goes on to the
+// canvas. The Gallery is part of this window, so its pinches arrive here.
+const galleryGesture = new NodeLadder.Gesture();
 ovEl.addEventListener(
   "wheel",
-  (e) => {
+  async (e) => {
     if (!e.ctrlKey) return;
     e.preventDefault();
-    if (Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 10) return; // Ctrl + mouse wheel
-    const g = (ovEl.__pinch = ovEl.__pinch || { acc: 1, fired: false });
-    clearTimeout(g.timer);
-    g.timer = setTimeout(() => (ovEl.__pinch = null), 260);
-    if (g.fired) return;
-    g.acc *= Math.exp(-e.deltaY / 100);
-    if (g.acc > 1.22) {
-      g.fired = true;
-      closeOverview(true);
+    const scale = NodeLadder.pinchScale(e);
+    if (scale === null) return; // Ctrl + mouse wheel
+    const dir = galleryGesture.feed(scale, performance.now());
+    if (dir === "in") closeOverview(true);
+    else if (dir === "out") {
+      await closeOverview(false);
+      api.ladder("canvas");
     }
   },
   { passive: false }
@@ -4166,106 +4326,56 @@ shieldBtn?.addEventListener("click", () => {
   api?.privacyMenu?.(r.left, r.bottom + 4);
 });
 
-// ---- Sidebar layout (docs/18-sidebar-chrome.md) ----
-// Another view of the same chrome. In Sidebar mode the real toolbar buttons,
-// the address bar and the tab list move into the sidebar's slots, so they keep
-// their handlers and state; Top bar mode puts each back where it was (a
-// comment left in its place marks the spot). Widths: full, rail, hidden.
-var SIDE_MIN = 220;
-var SIDE_MAX = 340;
-var SIDE_DEFAULT = 272;
-var SIDE_W = { full: Math.min(SIDE_MAX, Math.max(SIDE_MIN, Number(store.get("node.sideWidth", SIDE_DEFAULT)) || SIDE_DEFAULT)), rail: 68, hidden: 52 };
+// ---- The sidebar (B103, handoff spec 2) ----
+// NODE's only chrome. The real toolbar controls move into the sidebar's slots,
+// so they keep their handlers and state. Top to bottom: trail switcher,
+// address bar, tabs (the canvas first), timeline, tool grid (4 × 2). On the
+// canvas it always shows; over a page main.js shows a copy of it in its own
+// layer when the pointer reaches the left edge (sendMirror below).
+var SIDE_WIDTH = 300; // handoff Visual spec; main.js SIDE_W
 var mosaicShown = []; // the tabs Mosaic shows (from main), for the Mosaic group
 var SIDE_SLOTS = {
-  window: ["back", "forward", "reload", "agent-share-btn", "agent-btn", "dl-btn", "fullscreen-btn"],
-  address: ["omni-form", "zoom-badge", "shield-btn"],
+  nav: ["back", "forward", "reload"],
+  address: ["omni-form", "zoom-badge"],
+  pagetools: ["shield-btn", "star-btn"],
   find: ["findbar"],
-  tools: ["layout-btn", "capture-btn", "suggest-toggle", "sound-btn", "star-btn", "sb-history-btn", "sb-downloads-btn", "menu-btn"],
+  tools: ["layout-btn", "capture-btn", "suggest-toggle", "sound-btn", "private-btn", "open-file-btn", "sb-history-btn", "menu-btn"],
   newtab: ["new-tab"],
-  tabs: ["tabs"],
+  tabs: ["canvas-tab", "tabs"],
+  menutools: ["agent-share-btn", "agent-btn", "dl-btn", "fullscreen-btn"],
 };
-var chromeLayout = "top";
-var sideState = ["full", "rail", "hidden"].includes(store.get("node.sideState", "full")) ? store.get("node.sideState", "full") : "full";
-var sideLast = sideState === "hidden" ? "full" : sideState;
+// Labels under the tool tiles (the buttons' icons change with their state).
+var TOOL_LABELS = { "layout-btn": "Mosaic", "capture-btn": "Capture", "suggest-toggle": "Suggest", "sound-btn": "Sound", "private-btn": "Private", "open-file-btn": "Open", "sb-history-btn": "History", "menu-btn": "Menu" };
+var chromeLayout = "side";
 var sideTrails = [];
 var sideTrailsAt = 0;
+var sideTimeline = [];
+var sideTimelineAt = 0;
 const sidebarEl = document.getElementById("sidebar");
 
-for (const ids of Object.values(SIDE_SLOTS))
-  for (const id of ids) {
-    const el = document.getElementById(id);
-    if (el && !el.__home) el.before((el.__home = document.createComment(`home of #${id}`)));
-  }
-
-function sideWidth() {
-  return chromeLayout === "side" ? SIDE_W[sideState] : 0;
-}
-function sendChromeLayout() {
-  document.querySelector(".shell").style.setProperty("--side-w", `${sideWidth()}px`);
-  api?.setChromeLayout?.({ mode: chromeLayout, left: sideWidth() });
-}
-
-function applyChromeLayout(mode) {
-  const side = mode === "side";
-  chromeLayout = side ? "side" : "top";
-  document.body.classList.toggle("side", side);
+function placeSidebar() {
+  document.body.classList.add("side");
   for (const [slot, ids] of Object.entries(SIDE_SLOTS)) {
-    const box = sidebarEl.querySelector(`[data-slot="${slot}"]`);
+    const box = document.querySelector(`[data-slot="${slot}"]`);
     for (const id of ids) {
       const el = document.getElementById(id);
-      if (!el) continue;
-      if (side) box.appendChild(el);
-      else el.__home?.after(el);
+      if (el && box) box.appendChild(el);
     }
   }
-  for (const b of document.querySelectorAll(".sb-only")) b.hidden = !side;
-  document.getElementById("page-frame").hidden = !side;
-  setSideState(sideState, { send: false });
-  sendChromeLayout();
-  renderTabs();
+  for (const [id, label] of Object.entries(TOOL_LABELS)) document.getElementById(id)?.setAttribute("data-label", label);
+  for (const b of document.querySelectorAll(".sb-only")) b.hidden = false;
+  sidebarEl.hidden = false;
+  document.querySelector(".shell").style.setProperty("--side-w", `${SIDE_WIDTH}px`);
+  api?.setChromeLayout?.({ mode: "side", left: SIDE_WIDTH });
 }
+placeSidebar();
+var sidebarReady = true; // var: paintSide can run (from renderTabs) before this line
+// Kept for code that still asks to show the sidebar (it always shows now).
+function sideNeedsAddress() {}
 
-function setSideState(state, { send = true } = {}) {
-  sideState = state;
-  if (state !== "hidden") sideLast = state;
-  store.set("node.sideState", state);
-  const side = chromeLayout === "side";
-  document.body.classList.toggle("sb-rail", side && state === "rail");
-  document.body.classList.toggle("sb-hidden", side && state === "hidden");
-  sidebarEl.hidden = !side || state === "hidden";
-  document.getElementById("sb-show-wrap").hidden = !side || state !== "hidden";
-  document.getElementById("sb-hide").setAttribute("aria-expanded", "true");
-  if (send) sendChromeLayout();
-  paintSide();
-}
-function toggleSidebar() {
-  if (chromeLayout !== "side") return;
-  const showing = sideState !== "hidden";
-  setSideState(showing ? "hidden" : sideLast);
-  (showing ? document.getElementById("sb-show") : document.getElementById("sb-hide")).focus();
-}
-// Needs the address bar: show the full sidebar first (rail or hidden).
-function sideNeedsAddress() {
-  if (chromeLayout === "side" && sideState !== "full") setSideState("full");
-}
-
-document.getElementById("sb-hide").addEventListener("click", toggleSidebar);
-document.getElementById("sb-show").addEventListener("click", toggleSidebar);
-document.getElementById("sb-search").addEventListener("click", () => openCommandBar());
 document.getElementById("sb-history-btn").addEventListener("click", () => openMenu("history"));
-document.getElementById("sb-downloads-btn").addEventListener("click", () => openMenu("downloads"));
-document.getElementById("sb-trail-name").addEventListener("click", () => openMenu("trail"));
-document.getElementById("sb-trails-toggle").addEventListener("click", () => {
-  const open = document.getElementById("sb-trails-toggle").getAttribute("aria-expanded") !== "true";
-  store.set("node.sideTrailsOpen", open);
-  paintSide();
-});
-// Right-click the sidebar's empty space: full or rail.
-sidebarEl.addEventListener("contextmenu", (e) => {
-  if (e.target.closest("button, input, .tab, a")) return;
-  e.preventDefault();
-  setSideState(sideState === "rail" ? "full" : "rail");
-});
+document.getElementById("private-btn").addEventListener("click", () => api?.privateTab?.());
+document.getElementById("open-file-btn").addEventListener("click", () => api?.sharedChoose?.());
 
 // Two letters for a tab or trail in the rail.
 function monogram(text, url = "") {
@@ -4281,73 +4391,233 @@ function monogram(text, url = "") {
 }
 
 async function refreshSideTrails(force = false) {
-  if (!api?.researchList || (!force && Date.now() - sideTrailsAt < 2000)) return;
+  if (!api?.trailList || (!force && Date.now() - sideTrailsAt < 2000)) return;
   sideTrailsAt = Date.now();
   try {
-    sideTrails = await api.researchList();
+    sideTrails = await api.trailList();
   } catch {}
   paintSide(false);
 }
+async function refreshTimeline(force = false) {
+  if (!api?.trailTimeline || (!force && Date.now() - sideTimelineAt < 2000)) return;
+  sideTimelineAt = Date.now();
+  try {
+    sideTimeline = (await api.trailTimeline()) || [];
+  } catch {}
+  paintTimeline();
+}
+
+// ---- Trail switcher: name and menu, dots, swipe ----
+const switchName = document.getElementById("sb-switch-name");
+const switchMenu = document.getElementById("sb-switch-menu");
+async function goTrail(id) {
+  if (!id) return;
+  closeSwitchMenu();
+  const s = await api.trailSwitch(id);
+  if (s && typeof adoptSession === "function" && api.researchGet) adoptSession(await api.researchGet());
+  await refreshSideTrails(true);
+  refreshTimeline(true);
+  if (!canvasEl.hidden) openCanvas();
+}
+function stepTrail(dir) {
+  const list = sideTrails.filter((t) => !t.readonly);
+  if (list.length < 2) return;
+  const at = list.findIndex((t) => t.current);
+  goTrail(list[(at + dir + list.length) % list.length].id);
+}
+function closeSwitchMenu() {
+  switchMenu.hidden = true;
+  switchName.setAttribute("aria-expanded", "false");
+}
+function openSwitchMenu() {
+  switchMenu.innerHTML = "";
+  const item = (label, meta, run, opts = {}) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sb-menu-item" + (opts.current ? " current" : "");
+    b.setAttribute("role", "menuitem");
+    if (opts.disabled) b.disabled = true;
+    b.innerHTML = `<span class="mono" aria-hidden="true"></span><span class="nm"></span><span class="n"></span>`;
+    b.querySelector(".mono").textContent = opts.mono || "";
+    b.querySelector(".nm").textContent = label;
+    b.querySelector(".n").textContent = meta || "";
+    if (opts.title) b.title = opts.title;
+    b.addEventListener("click", run);
+    switchMenu.appendChild(b);
+    return b;
+  };
+  sideTrails.forEach((t, i) => {
+    const nt = t.tabs ?? 0;
+    item(t.name, `${nt} ${nt === 1 ? "tab" : "tabs"}`, () => (t.current ? closeSwitchMenu() : goTrail(t.id)), { mono: t.mono || monogram(t.name), current: t.current });
+  });
+  switchMenu.appendChild(Object.assign(document.createElement("div"), { className: "sb-menu-line" }));
+  item("New trail", "", async () => {
+    closeSwitchMenu();
+    await api.trailNew();
+    if (api.researchGet) adoptSession(await api.researchGet());
+    await refreshSideTrails(true);
+    refreshTimeline(true);
+  }, { mono: "+" });
+  // Phone handoff needs sync (B111, B50).
+  item("Continue from phone", "Needs sync", () => {}, { disabled: true, title: "Comes with sync (B111)" });
+  item("Open trail file…", keyLabel("mod+O"), () => {
+    closeSwitchMenu();
+    api.sharedChoose?.();
+  });
+  item("Private tab", keyLabel("mod+shift+N"), () => {
+    closeSwitchMenu();
+    api.privateTab?.();
+  });
+  switchMenu.hidden = false;
+  switchName.setAttribute("aria-expanded", "true");
+  switchMenu.querySelector(".sb-menu-item:not([disabled])")?.focus();
+}
+switchName.addEventListener("click", () => (switchMenu.hidden ? openSwitchMenu() : closeSwitchMenu()));
+switchMenu.addEventListener("keydown", (e) => {
+  const items = [...switchMenu.querySelectorAll(".sb-menu-item:not([disabled])")];
+  const at = items.indexOf(document.activeElement);
+  if (e.key === "Escape") {
+    closeSwitchMenu();
+    switchName.focus();
+  } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    items[(at + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+  }
+});
+document.addEventListener("pointerdown", (e) => {
+  if (!switchMenu.hidden && !e.target.closest("#sb-switcher")) closeSwitchMenu();
+});
+// Two-finger swipe across the sidebar: next or previous trail, one per gesture
+// (a gesture ends after 400 ms without wheel events).
+(function swipeTrails() {
+  let sum = 0;
+  let fired = false;
+  let quiet = 0;
+  sidebarEl.addEventListener(
+    "wheel",
+    (e) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) || e.ctrlKey) return;
+      e.preventDefault();
+      clearTimeout(quiet);
+      quiet = setTimeout(() => {
+        sum = 0;
+        fired = false;
+      }, 400);
+      if (fired) return;
+      sum += e.deltaX;
+      if (Math.abs(sum) > 80) {
+        fired = true;
+        stepTrail(sum > 0 ? 1 : -1);
+      }
+    },
+    { passive: false },
+  );
+  // Drag across the switcher: the same.
+  let start = null;
+  const sw = document.getElementById("sb-switcher");
+  sw.addEventListener("pointerdown", (e) => (start = e.target.closest(".sb-menu-item") ? null : { x: e.clientX }));
+  sw.addEventListener("pointerup", (e) => {
+    if (start && Math.abs(e.clientX - start.x) > 48) {
+      stepTrail(e.clientX < start.x ? 1 : -1);
+      closeSwitchMenu();
+    }
+    start = null;
+  });
+})();
+
+// ---- Timeline: the trail's sessions, newest first ----
+function paintTimeline() {
+  const list = document.getElementById("sb-timeline-list");
+  list.innerHTML = "";
+  let n = 0;
+  for (const sess of sideTimeline.slice(0, 6)) {
+    const head = document.createElement("div");
+    head.className = "sb-tl-session";
+    const when = new Date(sess.start || sess.items?.[0]?.at || Date.now());
+    head.textContent = `${when.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${sess.device || "This computer"}`;
+    list.appendChild(head);
+    for (const it of (sess.items || []).slice(0, 12)) {
+      n++;
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "sb-tl-row" + (it.timelineOnly ? " only" : "");
+      const time = new Date(it.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      row.innerHTML = `<span class="t"></span><span class="nm"></span><span class="k"></span>`;
+      // Timeline-only pages: drag onto the canvas, or the + button, puts them on it (B104).
+      if (it.timelineOnly && it.url) {
+        row.draggable = true;
+        row.addEventListener("dragstart", (e) => {
+          e.dataTransfer.setData("text/node-url", it.url);
+          e.dataTransfer.effectAllowed = "copy";
+        });
+      }
+      row.querySelector(".t").textContent = time;
+      row.querySelector(".nm").textContent = it.title || it.url || "Page";
+      const secs = typeof it.dwell === "number" ? Math.round(it.dwell / 1000) : null;
+      row.querySelector(".k").textContent = it.timelineOnly ? (secs !== null ? `${secs} s` : it.removedFromCanvas ? "Removed" : "Timeline only") : "";
+      row.title = `${it.title || ""}\n${it.url || ""}${it.timelineOnly ? "\nTimeline only: not on the canvas" : ""}`;
+      row.addEventListener("click", () => {
+        const open = tabs.find((t) => t.url === it.url);
+        if (open) api.activateTab(open.id);
+        else if (it.url) api.createTab(it.url);
+      });
+      if (it.timelineOnly && it.url) {
+        const wrap = document.createElement("div");
+        wrap.className = "sb-tl-wrap";
+        const put = document.createElement("button");
+        put.type = "button";
+        put.className = "sb-tl-put";
+        put.innerHTML = icon("plus");
+        put.title = "Put on canvas";
+        put.setAttribute("aria-label", `Put on canvas: ${it.title || it.url}`);
+        put.addEventListener("click", async () => {
+          await api.trailPlace({ url: it.url });
+          refreshCanvasData();
+        });
+        wrap.append(row, put);
+        list.appendChild(wrap);
+      } else list.appendChild(row);
+    }
+  }
+  document.getElementById("sb-timeline-count").textContent = n ? String(n) : "";
+  document.getElementById("sb-timeline").hidden = n === 0;
+}
 
 function paintSide(fetch = true) {
-  if (chromeLayout !== "side" || !sidebarEl) return;
-  if (fetch) refreshSideTrails();
-  // Current trail
-  // The list is read again every few seconds, so it has a rename made in the
-  // Menu; the session object has the keywords.
+  if (!sidebarReady) return;
+  if (fetch) {
+    refreshSideTrails();
+    refreshTimeline();
+  }
+  // Switcher: the current trail's name and monogram, and a dot per trail.
   const s = typeof session !== "undefined" ? session : null;
   const cur = sideTrails.find((t) => t.current);
-  const same = s && (!cur || cur.id === s.id);
-  if (s && cur && !same && api?.researchGet) api.researchGet().then((fresh) => fresh?.id === cur.id && adoptSession(fresh)); // switched elsewhere
-  document.getElementById("sb-trail-name").textContent = cur?.name || s?.name || "Trail";
-  const pages = cur ? cur.pages : (s?.trail || []).length;
-  const threadCount = same ? (s.threadList || []).length : cur?.threadCount || 0;
-  document.getElementById("sb-trail-meta").textContent = `${pages} ${pages === 1 ? "PAGE" : "PAGES"}${threadCount ? ` · ${threadCount} ${threadCount === 1 ? "THREAD" : "THREADS"}` : ""}${same ? ` · ${(s.threads || []).length} KW` : ""}`;
-  // Active trails
-  const open = store.get("node.sideTrailsOpen", true);
-  const head = document.getElementById("sb-trails-toggle");
-  head.setAttribute("aria-expanded", String(open));
-  document.getElementById("sb-trail-count").textContent = sideTrails.length || "";
-  document.getElementById("sb-trails-label").textContent = sideState === "rail" ? "Trails" : "Active trails";
-  const list = document.getElementById("sb-trail-list");
-  list.hidden = !open && sideState !== "rail";
-  list.innerHTML = "";
-  for (const t of sideTrails.slice(0, 8)) {
-    const b = document.createElement("button");
-    b.className = "sb-trail-row";
-    b.setAttribute("aria-current", String(Boolean(t.current)));
-    const nt = t.tabs ?? 0;
-    b.title = `${t.name} · ${nt} ${nt === 1 ? "tab" : "tabs"} · ${t.pages} ${t.pages === 1 ? "page" : "pages"}`;
-    b.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="nm"></span><span class="n"></span><span class="mono" aria-hidden="true"></span>`;
-    b.querySelector(".nm").textContent = t.name;
-    b.querySelector(".n").textContent = `${nt} ${nt === 1 ? "TAB" : "TABS"}`;
-    b.querySelector(".mono").textContent = monogram(t.name);
-    b.setAttribute("aria-label", `${t.name}, ${nt} ${nt === 1 ? "tab" : "tabs"}${t.current ? ", current trail" : ""}`);
-    b.addEventListener("click", async () => {
-      if (t.current) return openMenu("trail");
-      adoptSession(await api.researchSwitch(t.id));
-      await refreshSideTrails(true);
-    });
-    list.appendChild(b);
+  if (s && cur && cur.id !== s.id && api?.researchGet) api.researchGet().then((fresh) => fresh?.id === cur.id && adoptSession(fresh)); // switched elsewhere
+  const name = cur?.name || s?.name || "Trail";
+  document.getElementById("sb-switch-title").textContent = name;
+  document.getElementById("sb-switch-mono").textContent = cur?.mono || monogram(name);
+  switchName.setAttribute("aria-label", `Trail: ${name}. Open the trail menu`);
+  const dots = document.getElementById("sb-dots");
+  dots.innerHTML = "";
+  for (const t of sideTrails.slice(0, 12)) {
+    const d = document.createElement("button");
+    d.type = "button";
+    d.className = "sb-dot";
+    d.setAttribute("role", "tab");
+    d.setAttribute("aria-selected", String(Boolean(t.current)));
+    d.setAttribute("aria-label", t.name);
+    d.title = t.name;
+    // Media keeps playing muted in other trails: their dot turns green.
+    if (!t.current && t.playing) d.classList.add("live");
+    d.addEventListener("click", () => !t.current && goTrail(t.id));
+    dots.appendChild(d);
   }
-  if (sideState !== "rail") {
-    const add = document.createElement("button");
-    add.className = "sb-trail-row add";
-    add.innerHTML = `<svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span class="nm">New trail</span>`;
-    add.addEventListener("click", async () => {
-      document.getElementById("session-new").click();
-      await refreshSideTrails(true);
-      openMenu("trail");
-    });
-    list.appendChild(add);
-  }
+  document.getElementById("sb-tabs-count").textContent = tabs.length ? String(tabs.length) : "";
   // Mosaic group: the tiles, above the tabs, while Mosaic is on (not in the rail).
   const group = document.getElementById("sb-mosaic");
-  const inMosaic = layout === "mosaic" && sideState === "full" && mosaicShown.length > 0;
+  const inMosaic = layout === "mosaic" && mosaicShown.length > 0;
   group.hidden = !inMosaic;
   document.body.classList.toggle("sb-mosaic-on", inMosaic);
-  const tabsHead = document.getElementById("sb-tabs-head");
-  tabsHead.hidden = !inMosaic;
   if (inMosaic) {
     const list = document.getElementById("sb-mosaic-list");
     list.innerHTML = "";
@@ -4377,13 +4647,6 @@ function paintSide(fetch = true) {
   snd.classList.toggle("all", soundAll);
 }
 
-// The layout setting, at start and when it changes.
-api?.getSettings?.().then((s) => applyChromeLayout(s.chromeLayout === "side" ? "side" : "top"));
-const layoutSelect = document.getElementById("chrome-layout");
-layoutSelect?.addEventListener("change", async () => {
-  await api?.setSettings?.({ chromeLayout: layoutSelect.value });
-  applyChromeLayout(layoutSelect.value);
-});
 
 // ---- CommandBar (sidebar layout, docs/18-sidebar-chrome.md) ----
 // ⌘L (or the address field) opens it on the current address; ⌘T and New tab
@@ -4639,68 +4902,7 @@ cmdInput.addEventListener("keydown", (e) => {
 });
 document.getElementById("cmd-scrim").addEventListener("click", closeCommandBar);
 
-// Ways in, in the sidebar layout: the address field, the rail's search
-// button, ⌘L (focus-omni), ⌘T and New tab.
-omni.addEventListener("focus", () => {
-  if (chromeLayout === "side" && !cmdOpen) {
-    omni.blur();
-    openCommandBar();
-  }
-});
-document.getElementById("new-tab").addEventListener(
-  "click",
-  (e) => {
-    if (chromeLayout !== "side") return;
-    e.stopImmediatePropagation();
-    openCommandBar({ newTab: true });
-  },
-  true
-);
+// Ways in: ⌘L (focus-omni). The sidebar's address bar is a plain field
+// (B103: "Address bar searches or opens an address"). ⌘T and New tab show the
+// trail's canvas with its search bar ready (B102).
 
-// Sidebar width (full): drag the right edge, 220–340px; ←/→ on the handle;
-// double-click resets to 272. Not animated: the page follows the drag.
-(function sidebarResize() {
-  const handle = document.getElementById("sb-resize");
-  if (!handle) return;
-  const paintHandle = () => {
-    handle.setAttribute("aria-valuemin", String(SIDE_MIN));
-    handle.setAttribute("aria-valuemax", String(SIDE_MAX));
-    handle.setAttribute("aria-valuenow", String(SIDE_W.full));
-  };
-  const setWidth = (w, { save = true } = {}) => {
-    SIDE_W.full = Math.round(Math.min(SIDE_MAX, Math.max(SIDE_MIN, w)));
-    if (save) store.set("node.sideWidth", SIDE_W.full);
-    paintHandle();
-    if (chromeLayout === "side" && sideState === "full") sendChromeLayout();
-  };
-  paintHandle();
-  let frame = 0;
-  handle.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    handle.setPointerCapture(e.pointerId);
-    document.body.classList.add("sb-resizing");
-    const move = (ev) => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setWidth(ev.clientX, { save: false }));
-    };
-    const up = () => {
-      handle.removeEventListener("pointermove", move);
-      document.body.classList.remove("sb-resizing");
-      setWidth(SIDE_W.full);
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up, { once: true });
-    handle.addEventListener("pointercancel", up, { once: true });
-  });
-  handle.addEventListener("dblclick", () => setWidth(SIDE_DEFAULT));
-  handle.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      e.preventDefault();
-      setWidth(SIDE_W.full + (e.key === "ArrowRight" ? 8 : -8));
-    } else if (e.key === "Home" || e.key === "End") {
-      e.preventDefault();
-      setWidth(e.key === "Home" ? SIDE_MIN : SIDE_MAX);
-    }
-  });
-})();
