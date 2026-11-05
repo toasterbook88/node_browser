@@ -1,6 +1,6 @@
 # NODE Browser: Chromium Build
 
-Last updated: 2026-10-20. Status: step N01 written and checked without a Mac, with the NODE UI kit in the panel; first Mac build to run. Code in `browser/` (see `browser/README.md`).
+Last updated: 2026-11-05. Status: step N01 written and checked without a Mac, with the NODE UI kit in the panel; first Mac build to run. The trail canvas (B112 part 1) is in the built-in extension. The code is on `main` since 2026-11-05 (before that, on the `chromium-build` branch). Code in `browser/` (see `browser/README.md`).
 
 ## Decision (2026-10-18)
 
@@ -25,7 +25,8 @@ Pinned to ungoogled-chromium-macos `152.0.7977.64-1.1` (`browser/base.env`): Chr
 | Autoplay with sound, 4-tab limit, center on click | Built-in extension content script and service worker; autoplay default patch | N01 |
 | Google sign-in | Works: it is a real Chromium browser, not an embedded framework | N01 (to confirm on the Mac) |
 | Bookmarks, history, find, zoom, PiP, downloads, print, passwords, extensions | Chromium's own | N01 |
-| Trail, research sessions, Library, Ask AI, site rules, Settings | Extension side panel with `chrome.storage` | N02 |
+| Trail canvas, timeline, Replay, trail files (B100-B110) | The canvas page (`canvas.html`, every new tab) with the Electron build's `renderer/canvas.js`; the trail store (`core/trail.js` and friends) in the service worker over `chrome.storage` | B112 part 1 (done in code 2026-11-05) |
+| Research sessions, Library, Ask AI, site rules, Settings | Extension side panel with `chrome.storage` | N02 |
 | Only the active tab audible, Sound: all | Extension with `tabs.update({ muted })` | N02 |
 | NODE start page, Brave as default search, icon, "Chromium" wording in menus | Extension new tab page, initial preferences, branding resources | N03 |
 | MCP server, logged-out agent reader, research agent | Native helper inside the app bundle, talking to the extension over native messaging; reader in its own profile | N04 |
@@ -78,6 +79,23 @@ The kit from PR #1 (Electron) is in `browser/extension/src/ui/` (`node-ui.css`, 
 The Chromium test is `test/e2e/46-chromium-build.js` (22 was taken by `22-ui-refresh`).
 
 Record results in this doc and in `05-changelog.md`.
+
+## Trail canvas (B112, 2026-11-05)
+
+The trail canvas from the Electron build (B100-B110) runs in the built-in extension. The logic is shared: `core/trail.js`, `core/placement.js`, `core/trail-file.js` and `core/replay.js` are bundled into the service worker unchanged, and the canvas page loads `renderer/canvas.js` unchanged. Only the wiring is new.
+
+| Part | In the Chromium build |
+| --- | --- |
+| Storage | `extension/src/trail-service.js`: the trail store's files are keys in `chrome.storage.local` (prefix `trails/`), read into memory when the service worker starts and written back 300 ms after a change. `unlimitedStorage` permission |
+| Canvas | `canvas.html` replaces the new tab page: the canvas, Replay and Share at the top right, and a sidebar with the trail switcher (a menu), New trail, Open trail file…, the opened-file block, the timeline (Put on canvas with + or by dragging a row) and the Replay list. Messages `{ type: "trail", op, args }` to the service worker, as the Electron build's `trail:*` channels |
+| Pages read | The service worker records each page that finishes loading in a normal tab (`tabs.onUpdated`), with the page it came from (the page before it in the tab, or the tab that opened it). Incognito tabs are never recorded |
+| Pages becoming cards | The content script counts time on screen (the tab shown and its window in front); at 20 s, or after scrolling by hand by more than half a screen, the page becomes a card next to the page it came from. A page left earlier stays in the timeline with its time on page. Sign-in and payment pages never become cards |
+| Share | The share sheet (note, Start here, timeline, preview) saves `<name>.trail.md` as a download |
+| Open a file | Open trail file… or dropping a file on the canvas page: read only, on Replay step 1, with the note and Start here; Save as new trail |
+| Search | The canvas search bar: a search card and the results in a new tab. Private search opens an incognito window when NODE is allowed there |
+| Not yet | Mosaic and the Gallery (C++ patch, N05): the Mosaic button opens a group's pages as tabs for now. Ask about this trail (N02). Screenshots and voice notes. Trails keeping their own tabs (B80). Tabs still open when you switch trails are not made cards. Page pictures on cards |
+
+Checked in ungoogled-chromium 152 for Linux by `test/e2e/47-chromium-canvas.js` (in the `chromium-build` CI job). On the Mac it comes with the first full build (N01 checks, then open a new tab).
 
 ## Costs to keep in mind
 

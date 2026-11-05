@@ -256,6 +256,10 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - A file that does not read (a newer format, no header, no name) opens nothing; the shared-trail sheet says "This file could not be opened" with the reason.
 - It starts on Replay step 1 (B110).
 
+## Trail canvas in the Chromium build (B112)
+
+The same core modules run in the built-in extension of the Chromium build (`browser/extension/`, see `13-chromium-build.md`): the trail store in the service worker over `chrome.storage.local` (`src/trail-service.js`), and `renderer/canvas.js` in the canvas page (`src/canvas.html`, `src/canvas-page.js`), which is the new tab page. Visits come from `tabs.onUpdated`; the content script reports engagement (20 s on screen, hand scroll) and early exits. The Group tool's fitting moved into the store (`TrailStore.groupAround`), so both builds use it.
+
 ## Replay (B110)
 
 - `core/replay.js` (no platform imports) `replaySteps(snapshot, events)` builds the steps, oldest first, from the event log: each card on the canvas at the first event that names it; each visit that stayed in the timeline only (from the timeline, so one per page per session); each line you drew, each group and each group rename, at their own times; each question resolved or reopened and each group marked resolved. Moves, removals and unlinked lines are not steps; removed cards, lines and groups have none. A new session starts on another device or after a 30-minute gap (`session`, `first`).

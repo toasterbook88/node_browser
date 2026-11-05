@@ -1,0 +1,30 @@
+/* The canvas page in the Chromium build (B112). NODE tokens from styles.css;
+   no new colour values. The canvas rules (#canvas, .cv-*) and the sidebar
+   parts (.sb-*) come from styles.css too. */
+html, body.cp { height: 100%; margin: 0; overflow: hidden; background: var(--surface); color: var(--ink); font-family: var(--sans); }
+body.cp { display: grid; grid-template-columns: 300px minmax(0, 1fr); }
+body.cp #canvas { grid-column: 2; grid-row: 1; height: 100vh; }
+.cp-side { grid-column: 1; grid-row: 1; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px; border-right: 1px solid var(--line); background: var(--surface-raised); overflow: hidden; }
+.cp-switch { display: flex; flex-direction: column; gap: 8px; }
+.cp-switch select { height: 36px; padding: 0 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); font: 16px var(--sans); }
+.cp-switch select:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+.cp-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.cp-msg { margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 14px; }
+.cp-msg[hidden] { display: none; }
+.cp-timeline { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; }
+.cp-tl-head { padding: 8px 8px 2px; font: 11px var(--mono); text-transform: uppercase; color: var(--ink-muted); }
+.cp-tl-row { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 4px 0 8px; border-radius: var(--radius-sm); font-size: 14px; }
+.cp-tl-row:hover { background: var(--surface); }
+.cp-tl-row .t { flex: none; font: 11px var(--mono); color: var(--ink-muted); }
+.cp-tl-row .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cp-tl-row.only .nm { color: var(--ink-muted); }
+.cp-tl-row .put { flex: none; width: 24px; height: 24px; padding: 0; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
+.cp-tl-row .put:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+.cp-share { width: min(560px, calc(100vw - 32px)); padding: 0; background: var(--surface-raised); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.cp-share::backdrop { background: var(--surface); opacity: 0.7; }
+.cp-share-form { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.cp-share-form h2 { margin: 0; color: var(--ink); }
+.cp-field { display: flex; flex-direction: column; gap: 4px; }
+.cp-field textarea, .cp-field select { padding: 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); font: 14px var(--sans); }
+.cp-check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.cp-preview pre { max-height: 240px; overflow: auto; margin: 8px 0 0; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); font: 12px/18px var(--mono); white-space: pre-wrap; }

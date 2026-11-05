@@ -117,3 +117,4 @@ jobs:
           (cd test/e2e/site && python3 -m http.server 8765 >/dev/null 2>&1 &)
           sleep 1
           NODE_CHROMIUM=/tmp/ugc/chrome xvfb-run -a node test/e2e/46-chromium-build.js
+          NODE_CHROMIUM=/tmp/ugc/chrome xvfb-run -a node test/e2e/47-chromium-canvas.js

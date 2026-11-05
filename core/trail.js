@@ -19,6 +19,8 @@ const { isSensitiveUrl, hostOf } = require("./urls");
 const { placeNear } = require("./placement");
 
 const FORMAT = 1;
+const GROUP_SIDE = 24; // group padding around its cards: sides and bottom
+const GROUP_TOP = 48; // and top, where the name sits
 const SESSION_GAP_MS = 30 * 60 * 1000; // a gap of more than 30 minutes starts a new session
 const ENGAGED_MS = 20 * 1000; // the 20-second rule (doc 23); a starting guess
 const EVENT_TYPES = new Set(["opened", "bounced", "captured", "asked", "reported", "noted", "placed", "removed", "linked", "unlinked", "grouped", "renamed", "resolved", "moved"]);
@@ -512,6 +514,21 @@ class TrailStore {
     this.event(id, { type: "grouped", group: g.id, at, data: { label: g.label, cards: this.cardsIn(id, g).map((c) => c.id) } });
     this.save(id);
     return g;
+  }
+  // The Group tool (B105): a group around the cards whose centre is in the
+  // box drawn (24 px sides and bottom, 48 px top for the name); with no cards
+  // in it, the box as drawn.
+  groupAround(id, rect = {}, { label = "New group", at = this.now() } = {}) {
+    const box = { x: Number(rect.x), y: Number(rect.y), w: Math.abs(Number(rect.w)), h: Math.abs(Number(rect.h)) };
+    if (![box.x, box.y, box.w, box.h].every(Number.isFinite)) return null;
+    const inside = this.cardsIn(id, box);
+    let fit = box;
+    if (inside.length) {
+      const x1 = Math.min(...inside.map((c) => c.x)) - GROUP_SIDE, y1 = Math.min(...inside.map((c) => c.y)) - GROUP_TOP;
+      const x2 = Math.max(...inside.map((c) => c.x + c.w)) + GROUP_SIDE, y2 = Math.max(...inside.map((c) => c.y + c.h)) + GROUP_SIDE;
+      fit = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+    }
+    return this.group(id, { ...fit, label, at });
   }
   renameGroup(id, groupId, label, { at = this.now() } = {}) {
     const g = this.get(id)?.groups.find((x) => x.id === groupId);

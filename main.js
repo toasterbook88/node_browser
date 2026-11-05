@@ -3800,8 +3800,6 @@ function canvasEdit(fn) {
   sendUi("session-reloaded");
   return out ? { result: out, snap: trailSnapshot(id) } : null;
 }
-const GROUP_SIDE = 24;
-const GROUP_TOP = 48;
 ipcMain.handle("trail:move", (_e, cardId, x, y) => canvasEdit((id) => trailStore.moveCard(id, String(cardId), Number(x), Number(y))));
 ipcMain.handle("trail:group-move", (_e, groupId, x, y) => canvasEdit((id) => trailStore.moveGroup(id, String(groupId), Number(x), Number(y))));
 // Link: a drawn line (kind "you") from one card to another.
@@ -3810,20 +3808,7 @@ ipcMain.handle("trail:link-label", (_e, lineId, label) => canvasEdit((id) => tra
 ipcMain.handle("trail:unlink", (_e, lineId) => canvasEdit((id) => trailStore.unlink(id, String(lineId))));
 // Group: the box drawn; it fits the cards whose centre is in it (24 px sides
 // and bottom, 48 px top). With no cards in it, the box as drawn.
-ipcMain.handle("trail:group", (_e, rect = {}) =>
-  canvasEdit((id) => {
-    const box = { x: Number(rect.x), y: Number(rect.y), w: Math.abs(Number(rect.w)), h: Math.abs(Number(rect.h)) };
-    const inside = trailStore.cardsIn(id, box);
-    const fit = inside.length
-      ? (() => {
-          const x1 = Math.min(...inside.map((c) => c.x)) - GROUP_SIDE, y1 = Math.min(...inside.map((c) => c.y)) - GROUP_TOP;
-          const x2 = Math.max(...inside.map((c) => c.x + c.w)) + GROUP_SIDE, y2 = Math.max(...inside.map((c) => c.y + c.h)) + GROUP_SIDE;
-          return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
-        })()
-      : box;
-    return trailStore.group(id, { ...fit, label: "New group" });
-  }),
-);
+ipcMain.handle("trail:group", (_e, rect = {}) => canvasEdit((id) => trailStore.groupAround(id, rect)));
 ipcMain.handle("trail:group-rename", (_e, groupId, label) => canvasEdit((id) => trailStore.renameGroup(id, String(groupId), String(label || ""))));
 // Question: a thread, shown as a question card where it was placed.
 ipcMain.handle("trail:question", (_e, { x, y, title } = {}) =>
