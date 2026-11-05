@@ -4350,7 +4350,7 @@ function openSwitchMenu() {
   };
   sideTrails.forEach((t, i) => {
     const nt = t.tabs ?? 0;
-    item(t.name, `${nt} ${nt === 1 ? "tab" : "tabs"}${i < 9 ? ` · ⌃${i + 1}` : ""}`, () => (t.current ? closeSwitchMenu() : goTrail(t.id)), { mono: t.mono || monogram(t.name), current: t.current });
+    item(t.name, `${nt} ${nt === 1 ? "tab" : "tabs"}`, () => (t.current ? closeSwitchMenu() : goTrail(t.id)), { mono: t.mono || monogram(t.name), current: t.current });
   });
   switchMenu.appendChild(Object.assign(document.createElement("div"), { className: "sb-menu-line" }));
   item("New trail", "", async () => {
