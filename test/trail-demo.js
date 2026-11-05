@@ -210,6 +210,7 @@ const session = (id, extra) => ({
   assert.ok(evs.some((e) => e.type === "linked") && evs.some((e) => e.type === "grouped"));
   const tl = store.timeline(id);
   assert.deepStrictEqual(tl.map((x) => x.device), ["desktop", "phone", "desktop", "desktop"], "today, today on the phone, oct 28, oct 27");
+  assert.deepStrictEqual(tl[0].items.filter((i) => i.timelineOnly).map((i) => i.title), ["Starter smells like nail polish", "Sourdough"], "timeline-only items without an address are kept apart");
   assert.strictEqual(new Date(tl[0].startAt).getDate(), new Date(parsed.trail.at).getDate(), "\"today\" is the day the file was sent");
   ok("the sender's timeline comes in as events, in order, marked as theirs (today and yesterday read from the day it was sent)");
   assert.strictEqual(store.importFile(parsed).trail.id, id);

@@ -653,7 +653,8 @@ class TrailStore {
       item.title = (card && (card.title || card.text || card.quote)) || e.data?.title || url || e.type;
       if (e.type === "opened") {
         // An opened page shows once per session, at its latest time.
-        const prev = s.items.find((i) => i.type === "opened" && i.url === url);
+        // Items from an opened file have a title and no address.
+        const prev = s.items.find((i) => i.type === "opened" && (url ? i.url === url : !i.url && i.title === (e.data?.title || "")));
         if (prev) s.items.splice(s.items.indexOf(prev), 1);
         item.timelineOnly = !card || Boolean(card.removed);
         if (card?.removed) item.removedFromCanvas = true;
