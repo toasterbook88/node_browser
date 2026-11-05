@@ -208,7 +208,10 @@ const session = (id, extra) => ({
   assert.ok(evs.length > 0 && evs.every((e, i) => i === 0 || evs[i - 1].at <= e.at), "events are in time order");
   assert.ok(evs.every((e) => e.actor === "Sven"), "events are the sender's");
   assert.ok(evs.some((e) => e.type === "linked") && evs.some((e) => e.type === "grouped"));
-  ok("the sender's timeline comes in as events, in order, marked as theirs");
+  const tl = store.timeline(id);
+  assert.deepStrictEqual(tl.map((x) => x.device), ["desktop", "phone", "desktop", "desktop"], "today, today on the phone, oct 28, oct 27");
+  assert.strictEqual(new Date(tl[0].startAt).getDate(), new Date(parsed.trail.at).getDate(), "\"today\" is the day the file was sent");
+  ok("the sender's timeline comes in as events, in order, marked as theirs (today and yesterday read from the day it was sent)");
   assert.strictEqual(store.importFile(parsed).trail.id, id);
   assert.strictEqual(store.ids().length, 2);
   ok("opening the same file again goes back to the same trail");

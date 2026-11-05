@@ -186,9 +186,17 @@ class TrailStore {
     const sent = Date.parse(p.trail.at) || at;
     const year = new Date(sent).getFullYear();
     const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    // Day labels: "today" and "yesterday" (from the day the file was
+    // exported) or "oct 27".
     const when = (label, hm) => {
-      const m = String(label).match(/^([a-z]{3})\s+(\d{1,2})$/i);
       const [h, min] = String(hm).split(":").map(Number);
+      if (!(h >= 0) || !(min >= 0)) return null;
+      const rel = { today: 0, yesterday: 1 }[String(label).trim().toLowerCase()];
+      if (rel !== undefined) {
+        const day = new Date(sent);
+        return new Date(day.getFullYear(), day.getMonth(), day.getDate() - rel, h, min).getTime();
+      }
+      const m = String(label).match(/^([a-z]{3})\s+(\d{1,2})$/i);
       if (!m || MONTHS.indexOf(m[1].toLowerCase()) < 0) return null;
       let d = new Date(year, MONTHS.indexOf(m[1].toLowerCase()), Number(m[2]), h, min);
       if (d.getTime() > sent + 86400000) d = new Date(year - 1, d.getMonth(), d.getDate(), h, min);
