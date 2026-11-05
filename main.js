@@ -36,6 +36,7 @@ const AI = require("./core/ai");
 const Chat = require("./core/chat");
 const { ResearchStore } = require("./core/research");
 const { TrailStore, migrateSessions, sessionStorageOver } = require("./core/trail");
+const Replay = require("./core/replay");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
 const { BookmarkStore } = require("./core/bookmarks");
@@ -3861,6 +3862,13 @@ ipcMain.handle("trail:switch", (_e, id) => {
   if (!trailStore.has(String(id))) return null;
   changeTrail(() => research.switchTo(String(id)));
   return trailSnapshot();
+});
+// Replay (B110): the trail's steps, oldest first, built from its event log.
+ipcMain.handle("trail:replay", (_e, id) => {
+  research.saveNow();
+  const tid = id ? String(id) : research.current.id;
+  const snap = trailStore.snapshot(tid);
+  return snap ? Replay.replaySteps(snap, trailStore.events(tid)) : [];
 });
 ipcMain.handle("trail:rename", (_e, name) => {
   research.rename(name);

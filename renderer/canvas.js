@@ -130,6 +130,19 @@
   };
   const reducedMotion = () => root.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const FLY_MS = 320;
+  const PLAY_MS = 2400; // Replay: one step every 2.4 s while playing
+
+  // "Today 14:02 · Desktop", "Oct 27 14:02 · Phone".
+  function stepWhen(st) {
+    const dev = st.device === "phone" ? "Phone" : "Desktop";
+    if (st.at === null || st.at === undefined) return dev;
+    const d = new Date(st.at), now = new Date();
+    const day0 = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((day0(now) - day0(d)) / 86400000);
+    const day = diff === 0 ? "Today" : diff === 1 ? "Yesterday" : d.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+    const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    return `${day} ${time} · ${dev}`;
+  }
 
   class TrailCanvas {
     constructor(el, api, hooks = {}) {
@@ -313,7 +326,28 @@
       mos.addEventListener("click", () => this.hooks.mosaic?.([...this.multi]));
       this.multiBar.append(this.multiText, mos);
       this.draft = svg("line", { class: "cv-line you draft", x1: 0, y1: 0, x2: 0, y2: 0 });
-      el.append(this.vp, key, corner, this.top, this.selBar, this.toolsEl, this.multiBar);
+      // Top right (B110): Replay and Share.
+      const actions = h("div", "cv-actions");
+      this.replayBtn = h("button", "cv-act", "Replay");
+      this.replayBtn.type = "button";
+      this.replayBtn.title = "Replay this trail, oldest first";
+      this.replayBtn.setAttribute("aria-pressed", "false");
+      this.replayBtn.addEventListener("click", () => (this.replay ? this.endReplay() : this.hooks.replay?.()));
+      const share = h("button", "cv-act", "Share");
+      share.type = "button";
+      share.title = "Share this trail as a file";
+      share.addEventListener("click", () => this.hooks.share?.());
+      actions.append(this.replayBtn, share);
+      // Replay caption, bottom centre where the tools are (they hide during Replay).
+      this.rpBar = h("div", "cv-rp");
+      this.rpBar.hidden = true;
+      this.rpBar.setAttribute("role", "status");
+      this.rpMeta = h("div", "cv-rp-meta");
+      this.rpText = h("div", "cv-rp-text");
+      this.rpBar.append(this.rpMeta, this.rpText);
+      this.rpBadge = h("div", "cv-rp-badge");
+      this.rpBadge.hidden = true;
+      el.append(this.vp, key, corner, this.top, this.selBar, this.toolsEl, this.multiBar, actions, this.rpBar);
       this.bind();
       this.bindKeys();
     }
@@ -346,6 +380,16 @@
         const card = e.target.closest?.(".cv-card");
         const name = e.target.closest?.(".cv-group-name");
         const label = e.target.closest?.("[data-line]");
+        if (this.replay) {
+          if (card) {
+            const i = this.replay.steps.findIndex((st) => st.kind === "card" && st.card === card.dataset.id);
+            if (i >= 0) return this.replayGo(i);
+          }
+          drag = { mode: "pan", sx: e.clientX, sy: e.clientY, x: this.v.x, y: this.v.y, moved: false, replay: true };
+          vp.classList.add("panning");
+          vp.setPointerCapture(e.pointerId);
+          return;
+        }
         const tool = this.readonly ? "select" : this.tool;
         if (label && !this.readonly && tool === "select") {
           e.preventDefault();
@@ -404,7 +448,9 @@
         drag = null;
         vp.classList.remove("panning");
         if (!d) return;
-        if (d.mode === "pan" && !d.moved) {
+        if (d.mode === "pan" && !d.moved && d.replay) {
+          // A click on the background during Replay keeps the step.
+        } else if (d.mode === "pan" && !d.moved) {
           this.select(null);
           this.clearMulti();
         } else if (d.mode === "card" && d.moved) {
@@ -459,7 +505,7 @@
       });
       vp.addEventListener("dblclick", (e) => {
         const card = e.target.closest?.(".cv-card");
-        if (card) this.openCard(card.dataset.id);
+        if (card && !this.replay) this.openCard(card.dataset.id);
       });
       vp.addEventListener("keydown", (e) => {
         const step = e.shiftKey ? 240 : 60;
@@ -512,11 +558,12 @@
     // seenAt: when the person last saw this trail's canvas; cards placed after
     // it are new (violet) until selected.
     show(snap, previews = {}, { seenAt = 0 } = {}) {
+      if (this.replay && snap?.trail?.id !== this.data?.trail?.id) this.endReplay();
       this.seenAt = seenAt;
       this.data = snap;
       // Tools are off for opened files (read-only trails) (B105).
       this.readonly = Boolean(snap?.trail?.readonly);
-      this.toolsEl.hidden = this.readonly;
+      this.toolsEl.hidden = this.readonly || Boolean(this.replay);
       this.selRemove.hidden = this.readonly;
       this.el.classList.toggle("readonly", this.readonly);
       this.setTool("select");
@@ -589,6 +636,7 @@
         // the label menu (B105).
         if (ln.label || kind === "you") {
           const lab = h(kind === "you" ? "button" : "div", `cv-line-label ${kind}${ln.label ? "" : " empty"}`, ln.label ? LABEL_TEXT[ln.label] || ln.label : "");
+          lab.dataset.lid = ln.id;
           lab.style.transform = `translate(${(p.x1 + p.x2) / 2}px, ${(p.y1 + p.y2) / 2}px) translate(-50%, -50%)`;
           if (kind === "you") {
             lab.type = "button";
@@ -607,6 +655,120 @@
       for (const c of d.cards) cFrag.append(this.cardEl(c));
       this.cardsEl.replaceChildren(cFrag);
       this.paintMiniRects();
+      if (this.replay) this.paintReplay();
+    }
+
+    // ---- Replay (B110, handoff spec 5) ----
+    // steps: from trail:replay (core/replay.js). Runs on the real canvas:
+    // cards not reached yet are faint and dashed, the current one has a violet
+    // border and STEP n, NODE's lines show once both ends are shown, drawn
+    // lines and groups from their own step. The canvas moves to each step.
+    // Play: one step every 2.4 s, stopping at the last.
+    startReplay(steps, i = 0) {
+      if (!steps?.length) return false;
+      this.closeMenu();
+      this.clearMulti();
+      this.select(null);
+      this.clearSearch();
+      this.replay = { steps, i: -1, playing: false };
+      this.el.classList.add("replaying");
+      this.toolsEl.hidden = true;
+      this.replayBtn.setAttribute("aria-pressed", "true");
+      this.rpBar.hidden = false;
+      this.replayGo(i);
+      return true;
+    }
+    replayGo(i, { playing = false } = {}) {
+      const r = this.replay;
+      if (!r) return;
+      i = Math.max(0, Math.min(r.steps.length - 1, i));
+      clearTimeout(this.playTimer);
+      r.i = i;
+      r.playing = playing && i < r.steps.length - 1;
+      this.paintReplay();
+      this.flyToStep(r.steps[i]);
+      if (r.playing) this.playTimer = setTimeout(() => this.replay?.playing && this.replayGo(this.replay.i + 1, { playing: true }), PLAY_MS);
+      this.hooks.replayChanged?.(this.replayState());
+    }
+    replayToggle() {
+      const r = this.replay;
+      if (!r) return;
+      if (r.playing) {
+        clearTimeout(this.playTimer);
+        r.playing = false;
+        this.hooks.replayChanged?.(this.replayState());
+      } else this.replayGo(r.i >= r.steps.length - 1 ? 0 : r.i + 1, { playing: true });
+    }
+    endReplay() {
+      if (!this.replay) return;
+      clearTimeout(this.playTimer);
+      this.replay = null;
+      this.el.classList.remove("replaying");
+      this.toolsEl.hidden = this.readonly;
+      this.replayBtn.setAttribute("aria-pressed", "false");
+      this.rpBar.hidden = true;
+      this.rpBadge.hidden = true;
+      for (const el of this.el.querySelectorAll(".rp-future, .rp-current")) el.classList.remove("rp-future", "rp-current");
+      for (const el of this.lines.querySelectorAll(".cv-ln.rp-hidden")) el.classList.remove("rp-hidden");
+      for (const el of this.labelsEl.querySelectorAll(".rp-hidden")) el.classList.remove("rp-hidden");
+      this.hooks.replayChanged?.(null);
+    }
+    stepWhen(st) {
+      return stepWhen(st);
+    }
+    replayState() {
+      const r = this.replay;
+      return r ? { steps: r.steps, i: r.i, playing: r.playing } : null;
+    }
+    paintReplay() {
+      const r = this.replay;
+      const st = r.steps[r.i];
+      const cards = new Set(), drawn = new Set(), groups = new Set(), stepGroups = new Set();
+      r.steps.forEach((x, k) => {
+        if (x.kind === "group") stepGroups.add(x.group);
+        if (k > r.i) return;
+        if (x.kind === "card") cards.add(x.card);
+        else if (x.kind === "link") drawn.add(x.line);
+        else if (x.kind === "group") groups.add(x.group);
+      });
+      const current = st.kind === "card" ? st.card : null;
+      for (const el of this.cardsEl.children) {
+        const id = el.dataset.id;
+        el.classList.toggle("rp-future", !cards.has(id));
+        el.classList.toggle("rp-current", id === current);
+      }
+      for (const el of this.groupsEl.children) el.classList.toggle("rp-future", stepGroups.has(el.dataset.id) && !groups.has(el.dataset.id));
+      const lineOn = new Map();
+      for (const ln of this.data?.lines || []) lineOn.set(ln.id, ln.kind === "you" ? drawn.has(ln.id) : cards.has(ln.from) && cards.has(ln.to));
+      for (const el of this.lines.children) el.classList.toggle("rp-hidden", lineOn.get(el.dataset.id) === false);
+      for (const el of this.labelsEl.querySelectorAll(".cv-line-label")) el.classList.toggle("rp-hidden", lineOn.get(el.dataset.lid) === false);
+      // STEP n above the current card.
+      const c = current && this.data.cards.find((k) => k.id === current);
+      this.rpBadge.hidden = !c;
+      if (c) {
+        this.rpBadge.textContent = `Step ${st.n}`;
+        this.rpBadge.style.transform = `translate(${c.x}px, ${c.y - 30}px)`;
+        if (this.rpBadge.parentNode !== this.labelsEl) this.labelsEl.append(this.rpBadge);
+      }
+      this.rpMeta.textContent = `Step ${st.n} of ${r.steps.length} · ${stepWhen(st)}`;
+      this.rpText.textContent = st.caption;
+    }
+    flyToStep(st) {
+      const d = this.data;
+      if (!d || !st) return;
+      let box = null;
+      const byId = (id) => d.cards.find((c) => c.id === id);
+      if (st.card) box = byId(st.card);
+      else if (st.line) {
+        const ln = d.lines.find((l) => l.id === st.line);
+        const a = ln && byId(ln.from), b = ln && byId(ln.to);
+        if (a && b) box = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.max(a.x + a.w, b.x + b.w) - Math.min(a.x, b.x), h: Math.max(a.y + a.h, b.y + b.h) - Math.min(a.y, b.y) };
+      } else if (st.group) box = d.groups.find((g) => g.id === st.group);
+      if (!box) return;
+      const s = this.size();
+      const z = Math.max(this.v.z, 0.7);
+      // Leave room for the caption at the bottom.
+      this.fly(centreOn(box.x + box.w / 2, box.y + box.h / 2, s.w, s.h - 120, z));
     }
 
     cardEl(c) {
@@ -727,6 +889,18 @@
         const t = e.target;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
         if (e.metaKey || e.ctrlKey || e.altKey) return;
+        // Replay: ← → step, Space plays or pauses, Esc ends.
+        if (this.replay) {
+          if (e.key === " " && t?.tagName === "BUTTON") return; // the button handles it
+          const i = this.replay.i;
+          if (e.key === "ArrowRight") this.replayGo(i + 1);
+          else if (e.key === "ArrowLeft") this.replayGo(i - 1);
+          else if (e.key === " ") this.replayToggle();
+          else if (e.key === "Escape") this.endReplay();
+          else return;
+          e.preventDefault();
+          return;
+        }
         const tool = { v: "select", h: "hand", g: "group", l: "link", q: "question", n: "note" }[e.key.toLowerCase()];
         if (tool && !this.readonly) {
           e.preventDefault();
@@ -996,7 +1170,15 @@
       this.paintSelBar();
     }
 
+    say(text) {
+      this.roMsg.textContent = text;
+      this.sayShow();
+    }
     sayReadonly() {
+      this.roMsg.textContent = "Read only. Save as new trail to change it.";
+      this.sayShow();
+    }
+    sayShow() {
       if (!this.roMsg.isConnected) this.el.append(this.roMsg);
       this.roMsg.classList.add("on");
       clearTimeout(this.roTimer);

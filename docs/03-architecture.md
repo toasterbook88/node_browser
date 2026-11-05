@@ -254,7 +254,17 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - In the window: the canvas tools and Remove from canvas are hidden; dragging a card, dropping a timeline row or running a search from the canvas bar shows "Read only. Save as new trail to change it." (Private search still works.) The sidebar shows a Read only block: from whom, the note, Start here (selects that card) and Save as new trail. `trail:list` gives `readonly`, `from`, `note`, `startHere`, `startTitle`.
 - **Save as new trail** (`trail:save-as-new`, `TrailStore.saveAsNew`): an editable copy named "<name> · <sender>" with the same cards, groups, links, events and view, and switches to it. The file on disk is never written.
 - A file that does not read (a newer format, no header, no name) opens nothing; the shared-trail sheet says "This file could not be opened" with the reason.
-- Starting on Replay step 1 comes with B110.
+- It starts on Replay step 1 (B110).
+
+## Replay (B110)
+
+- `core/replay.js` (no platform imports) `replaySteps(snapshot, events)` builds the steps, oldest first, from the event log: each card on the canvas at the first event that names it; each visit that stayed in the timeline only (from the timeline, so one per page per session); each line you drew, each group and each group rename, at their own times; each question resolved or reopened and each group marked resolved. Moves, removals and unlinked lines are not steps; removed cards, lines and groups have none. A new session starts on another device or after a 30-minute gap (`session`, `first`).
+- `stepCaption` writes one caption per step from a template per kind, no AI: "Sven opened “…” on site, from “…”.", "captured a line from …: “…”", "asked NODE for a report", "asked: “…” (later resolved)", "wrote a note", "searched", "recorded a voice note", "visited “…” for 12 s. It stayed in the timeline only.", "linked “A” to “B” as “supports”", "grouped n cards as “…”", "renamed a group", "resolved", "reopened". Lines NODE drew (captured or reported from) are named in the card's caption once both ends show. "You" for your own events; the sender's name for an opened file's.
+- `trail:replay` returns the steps of the current trail.
+- **On the canvas** (`renderer/canvas.js` `startReplay`, `replayGo`, `replayToggle`, `endReplay`): cards not reached are faint and dashed, the current card has a violet border and STEP n, NODE's lines show once both ends are shown, drawn lines and groups from their own step; the canvas flies to each step (320 ms, none with reduced motion). The caption sits bottom left with "Step n of N · day time · device". The tools, search bar and line key hide; clicking a card jumps to its step; nothing can be changed.
+- **Sidebar:** the Replay list takes the timeline's place: End, a progress bar, previous, Play or Pause (one step every 2.4 s, stopping at the last), next, "n / N", and a row per step under its session (title, and Not kept, Link, Group, Rename or Resolved). A row jumps to its step.
+- **Keys:** ← and → step, Space plays or pauses, Esc ends.
+- Replay and Share sit at the top right of the canvas. An opened file starts on step 1; Start here and Save as new trail end Replay. Leaving the canvas ends it.
 
 ## Zoom ladder and Gallery (B107)
 
