@@ -10,7 +10,7 @@
 //
 // Needs a Chromium binary of the same version as the NODE base, for example
 // ungoogled-chromium 152.0.7977.64 for Linux:
-//   NODE_CHROMIUM=/path/to/chrome node test/e2e/22-chromium-build.js
+//   NODE_CHROMIUM=/path/to/chrome node test/e2e/46-chromium-build.js
 // Build the extension first: npm run build:browser-extension
 // --autoplay-policy stands in for browser/patches/0003-node-autoplay-default.
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");

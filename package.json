@@ -39,13 +39,14 @@
     "release": "electron-builder --publish always",
     "build:browser-extension": "node browser/extension/build.js",
     "check:browser-patches": "python3 browser/check_patches.py",
-    "test:chromium-build": "node test/e2e/22-chromium-build.js"
+    "test:chromium-build": "node test/e2e/46-chromium-build.js"
   },
   "devDependencies": {
+    "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/cli": "^2.8.0",
     "electron": "^44.7.0",
     "electron-builder": "^26.17.0",
-    "@tauri-apps/api": "^2.8.0"
+    "esbuild": "^0.28.2"
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "2.19",

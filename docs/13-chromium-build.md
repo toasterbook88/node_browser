@@ -75,7 +75,7 @@ The kit from PR #1 (Electron) is in `browser/extension/src/ui/` (`node-ui.css`, 
 | Toolbar | Chromium's own buttons stay. NODE has one extension button (opens the panel) with the kit's `suggest` icon (PNG, made by `browser/extension/make-toolbar-icons.js`). Mosaic, Sound and Capture buttons are added when those features exist here (N02, N05). |
 | Full screen | Chromium's own; no work needed on the Mac. |
 
-If `test/e2e/22-ui-refresh.js` (PR #1) and `22-chromium-build.js` both end up on main, rename one to `23-`.
+The Chromium test is `test/e2e/46-chromium-build.js` (22 was taken by `22-ui-refresh`).
 
 Record results in this doc and in `05-changelog.md`.
 
