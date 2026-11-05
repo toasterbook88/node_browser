@@ -371,7 +371,7 @@ function updateSidePoll() {
   }
 }
 function pollSide() {
-  if (!win || overlayHold || chromeHold || popupHold || !win.isFocused()) return;
+  if (!win || overlayHold || chromeHold || popupHold || !win.isVisible() || win.isMinimized()) return;
   const p = screen.getCursorScreenPoint();
   const b = win.getContentBounds();
   const inY = p.y >= b.y && p.y < b.y + b.height;
