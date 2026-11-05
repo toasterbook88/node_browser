@@ -810,6 +810,8 @@ async function crawl() {
 async function crawlViewport(reason) {
   const tab = tabs.find((t) => t.id === activeId);
   if (!tab) return;
+  // On the canvas no page is being read (B102): nothing to record or suggest from.
+  if (canvasShown && reason !== "manual") return;
   if (!api) {
     auto = deriveKeywords({ names: [tab.title] }).map((term) => ({ term }));
     renderKeys();
@@ -4694,22 +4696,14 @@ cmdInput.addEventListener("keydown", (e) => {
 document.getElementById("cmd-scrim").addEventListener("click", closeCommandBar);
 
 // Ways in, in the sidebar layout: the address field, the rail's search
-// button, ⌘L (focus-omni), ⌘T and New tab.
+// button and ⌘L (focus-omni). ⌘T and New tab show the trail's canvas with its
+// search bar ready instead (B102).
 omni.addEventListener("focus", () => {
   if (chromeLayout === "side" && !cmdOpen) {
     omni.blur();
     openCommandBar();
   }
 });
-document.getElementById("new-tab").addEventListener(
-  "click",
-  (e) => {
-    if (chromeLayout !== "side") return;
-    e.stopImmediatePropagation();
-    openCommandBar({ newTab: true });
-  },
-  true
-);
 
 // Sidebar width (full): drag the right edge, 220–340px; ←/→ on the handle;
 // double-click resets to 272. Not animated: the page follows the drag.

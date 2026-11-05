@@ -164,8 +164,11 @@ const tabCount = (ui) => ui.evaluate(() => tabs.length);
   await sleep(900);
   const saved = (await ui.evaluate(() => window.scout.trailGet())).view;
   check("the new position and zoom are saved to the trail", Math.round(saved.z * 100) === Math.min(250, Math.round(fitted.zoom * 1.25)), JSON.stringify(saved));
-  const firstRow = await ui.evaluate(() => ({ id: document.querySelector("#tabs .tab")?.dataset.id, active: document.querySelector("#tabs .tab")?.classList.contains("active") }));
-  check("the canvas is first in the tab list and marked as the open one", firstRow.id === "canvas" && firstRow.active, JSON.stringify(firstRow));
+  const firstRow = await ui.evaluate(() => {
+    const cv = document.getElementById("canvas-tab");
+    return { shown: !cv.hidden, before: Boolean(cv.compareDocumentPosition(document.getElementById("tabs")) & Node.DOCUMENT_POSITION_FOLLOWING), active: cv.classList.contains("active"), pageActive: document.querySelectorAll("#tabs .tab.active").length };
+  });
+  check("the canvas is first in the tab list and marked as the open one", firstRow.shown && firstRow.before && firstRow.active && firstRow.pageActive === 0, JSON.stringify(firstRow));
   check("no custom new tab address in Settings", (await ui.evaluate(() => !document.getElementById("start-page") && !("startPage" in window.scout))) && !("startPage" in (await ui.evaluate(() => window.scout.getSettings()))));
 
   // ⌘T: the canvas with its search bar ready; no page tab opens.

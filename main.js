@@ -2709,10 +2709,10 @@ ipcMain.handle("tab:close", (_e, id) => closeTab(id));
 ipcMain.handle("tab:activate", (_e, id) => activateTab(id));
 ipcMain.handle("tab:navigate", (_e, id, url) => {
   const tab = tabs.get(id);
+  if (isShareLink(url)) return void openShareLink(url);
   // No such tab (an address typed on the canvas, or the tab closed): a new tab.
   if (!tab) return url ? createTab(url) : undefined;
   if (canvasOn && id === activeId) activateTab(id);
-  if (isShareLink(url)) return void openShareLink(url);
   tab.sleeping = null;
   tab.view.webContents.loadURL(loadTarget(url, id));
 });
