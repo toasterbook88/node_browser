@@ -4780,13 +4780,7 @@ cmdInput.addEventListener("keydown", (e) => {
 });
 document.getElementById("cmd-scrim").addEventListener("click", closeCommandBar);
 
-// Ways in, in the sidebar layout: the address field, the rail's search
-// button and ⌘L (focus-omni). ⌘T and New tab show the trail's canvas with its
-// search bar ready instead (B102).
-omni.addEventListener("focus", () => {
-  if (chromeLayout === "side" && !cmdOpen) {
-    omni.blur();
-    openCommandBar();
-  }
-});
+// Ways in: ⌘L (focus-omni). The sidebar's address bar is a plain field
+// (B103: "Address bar searches or opens an address"). ⌘T and New tab show the
+// trail's canvas with its search bar ready (B102).
 
