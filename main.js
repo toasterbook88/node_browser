@@ -2799,6 +2799,12 @@ ipcMain.handle("layout:set", (_e, mode) => setLayoutMode(mode));
 function setLayoutMode(mode, { tell = false } = {}) {
   const before = layout;
   layout = mode === "mosaic" ? "mosaic" : "focus";
+  // Mosaic from the canvas: the pages come back, tiled.
+  if (layout === "mosaic" && canvasOn && shownTabs().length) {
+    canvasOn = false;
+    sendUi("canvas", { open: false });
+    emitList();
+  }
   // Into Mosaic from a tab that has no tile: the first chosen tile becomes active.
   const ids = layout === "mosaic" ? mosaicIds() : [];
   if (ids.length && !ids.includes(activeId)) {

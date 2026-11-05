@@ -52,11 +52,12 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   check("the sidebar is the only layout (an old top-bar setting is ignored)", (await ui.evaluate(() => document.body.classList.contains("side") && !document.getElementById("sidebar").hidden)) && (await ui.evaluate(() => window.scout.getSettings())).chromeLayout === "side");
   check("no top bar", await ui.$eval("header.chrome", (h) => getComputedStyle(h).display === "none"));
   check("no layout switch in Settings or the View menu", !(await ui.$("#chrome-layout")) && !(await app.evaluate(({ Menu }) => Boolean(Menu.getApplicationMenu().getMenuItemById("sidebar-layout")))));
+  // In document order (the timeline is hidden until the trail has pages).
   const order = await ui.evaluate(() => {
-    const at = (sel) => document.querySelector(sel).getBoundingClientRect().top;
-    return [at("#sb-switcher"), at("#sidebar #omni"), at("#canvas-tab"), at("#sb-timeline .sb-label"), at(".sb-tools")];
+    const els = ["#sb-switcher", "#sidebar #omni", "#canvas-tab", "#sb-timeline", ".sb-tools"].map((q) => document.querySelector(q));
+    return els.every((el, i) => i === 0 || els[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
   });
-  check("order: switcher, address bar, tabs, timeline, tool grid", order.every((y, i) => i === 0 || y > order[i - 1]), JSON.stringify(order.map(Math.round)));
+  check("order: switcher, address bar, tabs, timeline, tool grid", order);
   check("Back, Forward and Reload sit on the address bar's row", (await inSidebar(ui, ".sb-addr-row #back")) && (await inSidebar(ui, ".sb-addr-row #reload")));
   const tiles = await ui.$$eval(".sb-tools .tb", (b) => b.filter((x) => x.offsetParent).map((x) => x.dataset.label));
   check("tool grid 4 × 2: Mosaic, Capture, Suggest, Sound, Private, Open, History, Menu", tiles.join() === "Mosaic,Capture,Suggest,Sound,Private,Open,History,Menu", tiles.join());
@@ -107,10 +108,12 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   const items = await ui.$$eval("#sb-switch-menu .sb-menu-item .nm", (r) => r.map((x) => x.textContent));
   check("the switcher menu: trails, New trail, Continue from phone, Open trail file…, Private tab", ["New trail", "Continue from phone", "Open trail file…", "Private tab"].every((x) => items.includes(x)), items.join(" | "));
   check("Continue from phone waits for sync", await ui.$eval("#sb-switch-menu .sb-menu-item:nth-last-child(3)", (b) => b.disabled));
-  const firstName = (await ui.evaluate(() => window.scout.researchGet())).name;
-  await ui.click('#sb-switch-menu .sb-menu-item:has(.nm:text-is("New trail"))');
+  const first = await ui.evaluate(() => window.scout.researchGet());
+  const firstName = first.name;
+  await ui.locator("#sb-switch-menu .sb-menu-item", { hasText: "New trail" }).click();
   await sleep(1200);
-  check("New trail makes a trail and shows its canvas", (await ui.evaluate(() => window.scout.researchGet())).name !== firstName && (await ui.evaluate(() => !document.getElementById("canvas").hidden)));
+  const second = await ui.evaluate(() => window.scout.researchGet());
+  check("New trail makes a trail and shows its canvas", second.id !== first.id && (await ui.evaluate(() => !document.getElementById("canvas").hidden)), `${firstName} → ${second.name}`);
   await ui.evaluate(() => refreshSideTrails(true));
   await sleep(400);
   check("a dot per trail, the current one wide", (await ui.$$eval("#sb-dots .sb-dot", (d) => d.length)) === 2 && (await ui.$eval('#sb-dots .sb-dot[aria-selected="true"]', (d) => d.getBoundingClientRect().width)) === 16);
@@ -121,11 +124,11 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
     for (let i = 0; i < 6; i++) sb.dispatchEvent(new WheelEvent("wheel", { deltaX: 30, deltaY: 0, bubbles: true, cancelable: true }));
   });
   await sleep(1200);
-  check("a two-finger swipe on the sidebar goes to the next trail", (await ui.evaluate(() => window.scout.researchGet())).name === firstName && (await ui.evaluate(() => tabs.length)) === 3);
+  check("a two-finger swipe on the sidebar goes to the next trail", (await ui.evaluate(() => window.scout.researchGet())).id === first.id && (await ui.evaluate(() => tabs.length)) === 3);
   check("the switcher shows the current trail", (await ui.$eval("#sb-switch-title", (n) => n.textContent)) === firstName);
   await ui.click('#sb-dots .sb-dot[aria-selected="false"]');
   await sleep(1000);
-  check("a dot goes to its trail", (await ui.evaluate(() => window.scout.researchGet())).name !== firstName);
+  check("a dot goes to its trail", (await ui.evaluate(() => window.scout.researchGet())).id !== first.id);
   await ui.click('#sb-dots .sb-dot[aria-selected="false"]');
   await sleep(1000);
 
