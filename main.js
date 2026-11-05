@@ -3962,8 +3962,44 @@ ipcMain.handle("trail:share-preview", () => {
     captures: (s.captures || []).length,
     tabs: trailTabUrls().length,
     pins: (s.pins || []).length,
+    file: shareFileInfo(),
   };
 });
+// ---- The trail as a file (B108, node-trail v2, docs/26-trail-file-format.md) ----
+// What the share sheet shows about the file, and the file's text. opts:
+// { note, startHere, timeline (default on), tabs (open tabs, default off) }.
+function shareSnapshot() {
+  return trailSnapshot(currentTrail());
+}
+function openTabCards(snap) {
+  const urls = new Set(trailTabUrls());
+  return snap.cards.filter((c) => c.url && urls.has(c.url)).map((c) => c.id);
+}
+function shareFileInfo() {
+  const snap = shareSnapshot();
+  const cards = snap.cards.filter((c) => !(c.url && isSensitiveUrl(c.url)));
+  const items = snap.timeline.flatMap((x) => x.items).filter((i) => i.type === "opened" && !(i.url && isSensitiveUrl(i.url)));
+  return {
+    cards: cards.length,
+    groups: snap.groups.filter((g) => !g.suggested).length,
+    links: snap.lines.filter((l) => l.kind !== "suggested").length,
+    questions: cards.filter((c) => c.kind === "question").map((c) => ({ id: c.id, title: c.title, status: c.status })),
+    timeline: items.length,
+    timelineOnly: items.filter((i) => i.timelineOnly).length,
+    tabs: openTabCards(snap).length,
+  };
+}
+function shareFileText(opts = {}) {
+  const snap = shareSnapshot();
+  return TrailFile.toTrailMd(snap, {
+    by: loadSettings().displayName || "",
+    note: String(opts.note || "").slice(0, 300),
+    startHere: opts.startHere || "",
+    timeline: opts.timeline !== false,
+    openTabs: opts.tabs ? openTabCards(snap) : [],
+  });
+}
+ipcMain.handle("trail:share-text", (_e, opts) => shareFileText(opts || {}));
 // Builds the file text. opts: { pages: [urls], reports: bool, tabs: bool }.
 function trailFileText(opts = {}) {
   const by = loadSettings().displayName || "";
@@ -3978,7 +4014,7 @@ function trailFileText(opts = {}) {
 const trailFileName = (name) => `${String(name || "Trail").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Trail"}.trail.md`;
 let trailSavePath = null; // tests set a path instead of the Save dialog
 ipcMain.handle("trail:share-save", async (_e, opts = {}) => {
-  const text = trailFileText(opts);
+  const text = shareFileText(opts);
   let file = trailSavePath;
   if (!file) {
     const r = await dialog.showSaveDialog(win, {
@@ -3996,7 +4032,8 @@ ipcMain.handle("trail:share-save", async (_e, opts = {}) => {
     return { ok: false, error: `The file could not be saved: ${err.message}` };
   }
   usage().count("trailsShared");
-  return { ok: true, file, name: path.basename(file) };
+  const back = TrailFile.parseTrailMd(text);
+  return { ok: true, file, name: path.basename(file), cards: back.cards.length, links: back.lines.length };
 });
 // ---- Opening a shared trail (B82 step 5) ----
 // The file is read and checked; the Trail section shows a preview, then Open

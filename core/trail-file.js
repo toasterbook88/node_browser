@@ -499,4 +499,447 @@ function merge(base, incoming, answers = {}) {
   return out;
 }
 
-module.exports = { FORMAT, ADDED_IN_FILE, cleanUrl, pageKey, fromSession, toMarkdown, fromMarkdown, isTrailFile, mergePlan, merge, hashId, randomId };
+// ---- node-trail v2 (B108, docs/26-trail-file-format.md) ----
+// A canvas trail as one Markdown file: front matter, the title and the
+// sender's note, one section per group with its cards, cards outside groups,
+// links, the timeline and (optionally) open tabs. Layout sits in HTML
+// comments so the file reads as plain Markdown.
+//
+// toTrailMd(snapshot, options) writes a trail store snapshot
+// ({ trail, cards, groups, lines, timeline }); parseTrailMd(text) reads one
+// back into the same shape. Text NODE writes from data it cannot keep exactly
+// (a question's status line, a note's signature, timeline lines) is kept as
+// read, so export → import → export gives the same file.
+// Never in the file: removed cards, suggested groups and lines, sign-in and
+// payment pages, screenshots (only the capture's text and source go in).
+
+const FORMAT_V2 = 2;
+const SIZE_V2 = { page: [260, 200], video: [260, 220], capture: [260, 210], report: [260, 240], question: [260, 170], note: [260, 150], voice: [260, 170], search: [260, 140] };
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const two = (n) => String(n).padStart(2, "0");
+const hhmm = (t) => {
+  const d = new Date(t);
+  return `${two(d.getHours())}:${two(d.getMinutes())}`;
+};
+const dayLabel = (t) => {
+  const d = new Date(t);
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+};
+const oneLine = (t) => String(t ?? "").replace(/\s*\n\s*/g, " ").trim();
+const mdText = (t) => oneLine(t).replace(/\]\(/g, "] (");
+
+// The title a card shows in links, the timeline and Start here.
+function cardTitle(c) {
+  if (c.kind === "capture") return `“${oneLine(c.quote || c.title || c.source || "Capture")}”`;
+  if (c.kind === "note") return oneLine(c.text) || "Note";
+  if (c.kind === "voice") return oneLine(c.title) || `Voice note${c.durationText ? `, ${c.durationText}` : ""}`;
+  return oneLine(c.title || c.text || c.url || "Item");
+}
+
+function cardHeading(c) {
+  switch (c.kind) {
+    case "page":
+      return `### [${mdText(c.title || c.url)}](${c.url})`;
+    case "video":
+      return `### [${mdText(c.title || c.url)}](${c.url}) · video`;
+    case "search":
+      return `### [${mdText(c.title || `Search: ${c.query || ""}`)}](${c.url}) · search`;
+    case "capture":
+      return `### > ${mdText(c.quote || c.title || c.source || "Capture")}`;
+    case "report":
+      return `### Report: ${mdText(c.title)}`;
+    case "question":
+      return `### ? ${mdText(c.title)}`;
+    case "voice":
+      return `### Voice note${c.durationText ? ` · ${c.durationText}` : ""}`;
+    default:
+      return "### Note";
+  }
+}
+
+function countReplies(list) {
+  return (list || []).reduce((n, r) => n + 1 + countReplies(r.replies), 0);
+}
+function lastReply(list) {
+  let last = null;
+  const walk = (l) => (l || []).forEach((r) => {
+    if (!last || (r.at || 0) >= (last.at || 0)) last = r;
+    walk(r.replies);
+  });
+  walk(list);
+  return last;
+}
+
+function cardBody(c) {
+  const out = [];
+  switch (c.kind) {
+    case "page":
+      if (c.excerpt) out.push(oneLine(c.excerpt));
+      if (c.keywords?.length) out.push(`Keywords: ${c.keywords.map(oneLine).join(", ")}`);
+      break;
+    case "video":
+      if (c.savedText) out.push(c.savedText);
+      else if (c.savedAt || c.duration) out.push(`Saved at ${c.savedAt || "0:00"} of ${c.duration || "?"}`);
+      break;
+    case "capture":
+      out.push(c.fromText || `Captured from ${c.source || "a page"}${c.time ? ` · ${c.device || "desktop"} ${hhmm(c.time)}` : ""}`);
+      break;
+    case "report":
+      if (c.excerpt) out.push(oneLine(c.excerpt));
+      out.push(c.sourcesText || `AI-assisted · ${(c.sources || []).length} sources`);
+      break;
+    case "question": {
+      const n = countReplies(c.replies);
+      out.push(c.statusText || `Status: ${c.status === "resolved" ? "resolved" : "open"}${c.status !== "resolved" && (n || c.replyCount) ? ` · ${n || c.replyCount} ${(n || c.replyCount) === 1 ? "reply" : "replies"}` : ""}`);
+      if (c.latestText) out.push(`- ${c.latestText}`);
+      else if (c.status === "resolved" && c.conclusion) out.push(`- Conclusion: ${oneLine(c.conclusion)}`);
+      else {
+        const r = lastReply(c.replies);
+        if (r) out.push(`- ${r.by ? `${oneLine(r.by)}: ` : ""}${oneLine(r.text)}`);
+      }
+      break;
+    }
+    case "note":
+      if (c.text) out.push(...String(c.text).split(/\n+/).map((l) => l.trim()).filter(Boolean));
+      if (c.signText) out.push(c.signText);
+      else if (c.author || c.at) out.push(`— ${[c.author, c.at ? dayLabel(c.at) : ""].filter(Boolean).join(" · ")}`);
+      break;
+    case "voice":
+      if (c.text) out.push(oneLine(c.text));
+      break;
+  }
+  return out;
+}
+
+function layoutComment(c) {
+  return `<!-- id:${c.id} type:${c.kind} at:${Math.round(c.x)},${Math.round(c.y)} size:${Math.round(c.w)}x${Math.round(c.h)} -->`;
+}
+const inGroup = (c, g) => {
+  const x = c.x + c.w / 2, y = c.y + c.h / 2;
+  return x >= g.x && x <= g.x + g.w && y >= g.y && y <= g.y + g.h;
+};
+const sendable = (c) => !c.removed && !(c.url && isSensitiveUrl(c.url)) && !(["page", "video", "search"].includes(c.kind) && !cleanUrl(c.url));
+// Addresses leave without private tokens or tracking codes (cleanUrl).
+const forFile = (c) => (c.url ? { ...c, url: cleanUrl(c.url) || undefined } : c);
+
+function linkLabel(l) {
+  if (l.kind === "nav") return "opened from";
+  if (l.kind === "you") return `drawn${l.label ? ` · ${l.label}` : ""}`;
+  return l.label || "captured from";
+}
+
+function timelineLine(sess, byId) {
+  if (sess.raw) return sess.raw;
+  const parts = (sess.items || [])
+    .map((it) => {
+      const c = it.card && byId.get(it.card);
+      const title = c ? cardTitle(c) : oneLine(it.title);
+      if (!title || (it.url && isSensitiveUrl(it.url))) return null;
+      return `${hhmm(it.at)} ${title}${c ? "" : " (timeline only)"}`;
+    })
+    .filter(Boolean);
+  if (!parts.length) return null;
+  const end = Math.max(...(sess.items || []).map((i) => i.at || 0), sess.endAt || 0);
+  return `- ${dayLabel(sess.startAt)} · ${sess.device || "desktop"} · ${hhmm(sess.startAt)} – ${hhmm(end)}: ${parts.join("; ")}`;
+}
+
+// options: { by, at (ms or ISO), note, startHere (card id), timeline (true),
+// openTabs: [card ids] (none by default) }
+function toTrailMd(snap, { by = "", at = Date.now(), note, startHere, timeline = true, openTabs = [] } = {}) {
+  const t = snap.trail || {};
+  const cards = (snap.cards || []).filter(sendable).map(forFile);
+  const byId = new Map(cards.map((c) => [c.id, c]));
+  const groups = (snap.groups || []).filter((g) => !g.suggested);
+  const start = byId.get(startHere ?? t.startHere) || null;
+  const words = note ?? t.note ?? "";
+  const iso = typeof at === "string" ? at : new Date(at).toISOString().replace(/\.\d{3}Z$/, "Z");
+  const L = ["---", "node-trail: 2", `id: ${t.id}`, `name: ${oneLine(t.name) || "Trail"}`, `exported-by: ${oneLine(by || t.by) || "Someone"}`, `exported-at: ${iso}`];
+  if (start) L.push(`start-here: ${start.id}`);
+  L.push("---", `# ${oneLine(t.name) || "Trail"}`, "");
+  if (oneLine(words)) L.push(oneLine(words), "");
+  if (start) L.push(`**Start here:** [${mdText(cardTitle(start))}](#${start.id})`, "");
+  const block = (c) => L.push(cardHeading(c), layoutComment(c), ...cardBody(c), "");
+  const placed = new Set();
+  for (const g of groups) {
+    L.push(`## ${oneLine(g.label) || "New group"}`, `<!-- group:${g.id} at:${Math.round(g.x)},${Math.round(g.y)} size:${Math.round(g.w)}x${Math.round(g.h)}${g.resolved ? " resolved" : ""} -->`, "");
+    for (const c of cards) if (!placed.has(c.id) && inGroup(c, g)) {
+      placed.add(c.id);
+      block(c);
+    }
+  }
+  const loose = cards.filter((c) => !placed.has(c.id));
+  if (loose.length) {
+    L.push("## Not in a group", "");
+    loose.forEach(block);
+  }
+  const lines = (snap.lines || []).filter((l) => l.kind !== "suggested" && byId.has(l.from) && byId.has(l.to));
+  if (lines.length) {
+    L.push("## Links", "");
+    for (const l of lines) L.push(`- [${mdText(cardTitle(byId.get(l.from)))}](#${l.from}) → [${mdText(cardTitle(byId.get(l.to)))}](#${l.to}) · ${linkLabel(l)} <!-- from:${l.from} to:${l.to} kind:${l.kind} -->`);
+    L.push("");
+  }
+  if (timeline) {
+    const tl = (snap.timeline || []).map((s) => timelineLine(s, byId)).filter(Boolean);
+    if (tl.length) L.push("## Timeline", "", ...tl, "");
+  }
+  const tabs = (openTabs || []).filter((id) => byId.has(id));
+  if (tabs.length) L.push("## Open tabs", "", ...tabs.map((id) => `- [${mdText(cardTitle(byId.get(id)))}](#${id})`), "");
+  return L.join("\n");
+}
+
+// Reads a node-trail v2 file. Returns { trail, cards, groups, lines,
+// timeline, openTabs }. Throws an Error whose message can be shown as is
+// when the file is not one NODE can open.
+function parseTrailMd(text) {
+  const lines = String(text ?? "").replace(/^﻿/, "").replace(/\r\n?/g, "\n").split("\n");
+  if ((lines[0] || "").trim() !== "---") throw new Error("This is not a NODE trail file: it does not start with a \"---\" header.");
+  const fm = {};
+  let i = 1;
+  for (; i < lines.length && lines[i].trim() !== "---"; i++) {
+    const m = lines[i].match(/^([\w-]+):\s*(.*)$/);
+    if (m) fm[m[1]] = m[2].trim();
+  }
+  if (i >= lines.length) throw new Error("This trail file is cut short: its header never ends.");
+  const version = Number(fm["node-trail"]);
+  if (!fm["node-trail"]) throw new Error("This is not a NODE trail file: it has no \"node-trail\" line at the top.");
+  if (version !== FORMAT_V2) throw new Error(version > FORMAT_V2 ? `This trail file was made by a newer NODE (format ${version}). Update NODE to open it.` : `This trail file uses format ${fm["node-trail"]}; this reader opens format 2.`);
+  if (!fm.name) throw new Error("This trail file has no trail name.");
+  i++;
+  const out = {
+    trail: { id: fm.id || "", name: fm.name, by: fm["exported-by"] || "", at: fm["exported-at"] || "", startHere: fm["start-here"] || "", note: "" },
+    cards: [],
+    groups: [],
+    lines: [],
+    timeline: [],
+    openTabs: [],
+  };
+  const note = [];
+  const attr = (c, k) => (c.match(new RegExp(`${k}:(\\S+)`)) || [])[1] || null;
+  const pair = (v, sep) => (v ? v.split(sep).map(Number) : null);
+  let section = "head";
+  let group = null;
+  let card = null;
+  let n = 0;
+  const finish = () => {
+    if (!card) return;
+    out.cards.push(readCard(card));
+    card = null;
+  };
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    const t = line.trim();
+    if (/^# /.test(line) && section === "head") {
+      section = "note";
+      continue;
+    }
+    if (/^## /.test(line)) {
+      finish();
+      const name = line.slice(3).trim();
+      const next = (lines[i + 1] || "").trim();
+      group = null;
+      if (/^<!-- group:/.test(next)) {
+        const at = pair(attr(next, "at"), ",");
+        const size = pair(attr(next, "size"), "x");
+        group = { id: attr(next, "group") || `g${++n}`, label: name, resolved: /\bresolved\b/.test(next), suggested: false, x: at?.[0], y: at?.[1], w: size?.[0], h: size?.[1], cards: [] };
+        out.groups.push(group);
+        section = "cards";
+        i++;
+      } else if (/^Links$/i.test(name)) section = "links";
+      else if (/^Timeline$/i.test(name)) section = "timeline";
+      else if (/^Open tabs$/i.test(name)) section = "tabs";
+      else if (/^Not in a group$/i.test(name)) section = "cards";
+      else {
+        // A group written by hand, without a layout comment.
+        group = { id: `g${++n}`, label: name, resolved: false, suggested: false, cards: [] };
+        out.groups.push(group);
+        section = "cards";
+      }
+      continue;
+    }
+    if (section === "note") {
+      const sh = t.match(/^\*\*Start here:\*\*\s*\[.*\]\(#(.+)\)$/);
+      if (sh) out.trail.startHere ||= sh[1];
+      else if (t) note.push(t);
+      continue;
+    }
+    if (section === "cards") {
+      if (/^### /.test(line)) {
+        finish();
+        const meta = (lines[i + 1] || "").trim();
+        card = { head: line.slice(4).trim(), body: [], group };
+        if (/^<!-- id:/.test(meta)) {
+          const at = pair(attr(meta, "at"), ",");
+          const size = pair(attr(meta, "size"), "x");
+          Object.assign(card, { id: attr(meta, "id"), kind: attr(meta, "type"), x: at?.[0], y: at?.[1], w: size?.[0], h: size?.[1] });
+          i++;
+        } else card.id = `fc${++n}`;
+        group?.cards.push(card.id);
+        continue;
+      }
+      if (card && t) card.body.push(t);
+      continue;
+    }
+    if (section === "links") {
+      const m = line.match(/<!-- from:(\S+) to:(\S+) kind:(\S+) -->/);
+      if (!m) continue;
+      const shown = line.replace(/\s*<!--.*-->\s*$/, "");
+      let label = shown.slice(shown.lastIndexOf(") · ") + 4);
+      if (m[3] === "nav") label = "";
+      else if (m[3] === "you") label = label.replace(/^drawn( · )?/, "");
+      out.lines.push({ id: `fl${out.lines.length + 1}`, from: m[1], to: m[2], kind: m[3], label });
+      continue;
+    }
+    if (section === "timeline" && /^- /.test(line)) {
+      out.timeline.push(readTimelineLine(line));
+      continue;
+    }
+    if (section === "tabs") {
+      const m = line.match(/\(#([^)]+)\)\s*$/);
+      if (m) out.openTabs.push(m[1]);
+    }
+  }
+  finish();
+  out.trail.note = note.join(" ");
+  const ids = new Set(out.cards.map((c) => c.id));
+  out.lines = out.lines.filter((l) => ids.has(l.from) && ids.has(l.to));
+  if (out.trail.startHere && !ids.has(out.trail.startHere)) out.trail.startHere = "";
+  layoutMissing(out);
+  for (const g of out.groups) delete g.cards;
+  // Timeline items that are cards point at them.
+  const byTitle = new Map(out.cards.map((c) => [cardTitle(c), c.id]));
+  for (const s of out.timeline) for (const it of s.items) if (!it.timelineOnly && byTitle.has(it.title)) it.card = byTitle.get(it.title);
+  return out;
+}
+
+function guessKind(head) {
+  if (/^\?\s/.test(head)) return "question";
+  if (/^>\s?/.test(head)) return "capture";
+  if (/^Report:/i.test(head)) return "report";
+  if (/^Voice note/i.test(head)) return "voice";
+  if (/^\[.*\]\(.*\)\s*·\s*video$/.test(head)) return "video";
+  if (/^\[.*\]\(.*\)\s*·\s*search$/.test(head)) return "search";
+  if (/^\[.*\]\(.*\)/.test(head)) return "page";
+  return "note";
+}
+
+function readCard(raw) {
+  const kind = SIZE_V2[raw.kind] ? raw.kind : guessKind(raw.head);
+  const [w, h] = SIZE_V2[kind];
+  const c = { id: raw.id, kind, x: raw.x, y: raw.y, w: raw.w || w, h: raw.h || h, pinned: false };
+  const b = raw.body;
+  const link = raw.head.match(/^\[(.*)\]\((\S*)\)/);
+  if (link) {
+    c.title = link[1];
+    c.url = link[2];
+  }
+  if (c.url && !/^https?:\/\//i.test(c.url)) delete c.url;
+  switch (kind) {
+    case "page": {
+      const kw = b.find((l) => /^Keywords:/.test(l));
+      const ex = b.filter((l) => l !== kw);
+      if (ex.length) c.excerpt = ex.join(" ");
+      c.keywords = kw ? kw.replace(/^Keywords:\s*/, "").split(/,\s*/).filter(Boolean) : [];
+      break;
+    }
+    case "video":
+      if (b[0]) c.savedText = b[0];
+      break;
+    case "search":
+      c.query = (c.title || "").replace(/^Search:\s*/, "");
+      break;
+    case "capture":
+      c.quote = raw.head.replace(/^>\s*/, "");
+      c.fromText = b[0] || "";
+      c.source = ((b[0] || "").match(/^Captured from (.*?)(?: · |$)/) || [])[1] || "";
+      break;
+    case "report":
+      c.title = raw.head.replace(/^Report:\s*/, "");
+      if (b.length > 1) c.excerpt = b.slice(0, -1).join(" ");
+      c.sourcesText = b.at(-1) || "AI-assisted";
+      c.sources = [];
+      break;
+    case "question": {
+      c.title = raw.head.replace(/^\?\s*/, "");
+      const st = b.find((l) => /^Status:/.test(l)) || "Status: open";
+      c.statusText = st;
+      c.status = /resolved/i.test(st) ? "resolved" : "open";
+      const latest = b.find((l) => /^- /.test(l));
+      if (latest) {
+        c.latestText = latest.slice(2);
+        const con = c.latestText.match(/^Conclusion:\s*(.*)$/);
+        if (con) c.conclusion = con[1];
+      }
+      c.replies = [];
+      c.pages = [];
+      break;
+    }
+    case "note": {
+      const sign = b.length > 1 && /^— /.test(b.at(-1)) ? b.at(-1) : null;
+      c.text = (sign ? b.slice(0, -1) : b).join("\n");
+      if (sign) {
+        c.signText = sign;
+        c.author = sign.slice(2).split(" · ")[0];
+      }
+      break;
+    }
+    case "voice":
+      c.durationText = (raw.head.match(/·\s*(.+)$/) || [])[1] || "";
+      if (b.length) c.text = b.join(" ");
+      break;
+  }
+  return c;
+}
+
+function readTimelineLine(line) {
+  const cut = line.indexOf(": ");
+  const head = cut > 0 ? line.slice(2, cut) : line.slice(2);
+  const [label = "", device = "desktop"] = head.split(" · ");
+  const items = (cut > 0 ? line.slice(cut + 2).split(/;\s(?=\d{1,2}:\d{2}\s)/) : [])
+    .map((it) => {
+      const m = it.match(/^(\d{1,2}:\d{2})\s+(.*)$/);
+      if (!m) return null;
+      const only = /\s*\(timeline only\)\s*$/.test(m[2]);
+      return { time: m[1], title: m[2].replace(/\s*\(timeline only\)\s*$/, ""), timelineOnly: only };
+    })
+    .filter(Boolean);
+  return { raw: line, label, device, items };
+}
+
+// Cards and groups without layout comments: groups one under another, their
+// cards in rows of three, in file order; loose cards below them.
+function layoutMissing(out) {
+  const has = (o) => [o.x, o.y].every((v) => typeof v === "number" && !Number.isNaN(v));
+  const byId = new Map(out.cards.map((c) => [c.id, c]));
+  let bottom = Math.max(0, ...out.groups.filter(has).map((g) => g.y + g.h + 80), ...out.cards.filter(has).map((c) => c.y + c.h + 80));
+  const grid = (list, x0, y0) => {
+    let rowH = 0;
+    list.forEach((c, k) => {
+      if (k % 3 === 0 && k) {
+        y0 += rowH + 24;
+        rowH = 0;
+      }
+      c.x = x0 + (k % 3) * (c.w + 40);
+      c.y = y0;
+      rowH = Math.max(rowH, c.h);
+    });
+    return y0 + rowH;
+  };
+  for (const g of out.groups) {
+    const cards = (g.cards || []).map((id) => byId.get(id)).filter(Boolean);
+    const loose = cards.filter((c) => !has(c));
+    if (has(g)) {
+      if (loose.length) grid(loose, g.x + 24, Math.max(g.y + 48, ...cards.filter(has).map((c) => c.y + c.h + 24)));
+      continue;
+    }
+    g.x = 0;
+    g.y = bottom;
+    const end = grid(loose, g.x + 24, g.y + 48);
+    g.w = Math.max(308, ...cards.map((c) => c.x + c.w + 24 - g.x));
+    g.h = Math.max(272, end + 24 - g.y);
+    bottom = g.y + g.h + 80;
+  }
+  const rest = out.cards.filter((c) => !has(c));
+  if (rest.length) grid(rest, 0, bottom);
+}
+
+module.exports = { FORMAT, ADDED_IN_FILE, cleanUrl, pageKey, fromSession, toMarkdown, fromMarkdown, isTrailFile, mergePlan, merge, hashId, randomId, FORMAT_V2, toTrailMd, parseTrailMd, cardTitle };

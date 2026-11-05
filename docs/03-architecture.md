@@ -236,6 +236,15 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - **Ask about this trail:** the Ask pane with the "Research session" scope (the trail's pages) and the question sent.
 - **Private search:** the results in a private tab; no card.
 
+## Trail files, node-trail v2 (B108)
+
+- `core/trail-file.js` `toTrailMd(snapshot, options)` and `parseTrailMd(text)` write and read the format in `26-trail-file-format.md`: front matter (`node-trail: 2`, id, name, exported-by, exported-at, start-here), the title, the sender's note and Start here, one section per group (layout in `<!-- group:… -->`), cards as `###` headings (layout in `<!-- id:… type:… at:… size:… -->`), Not in a group, Links (kind in a comment; suggested lines left out), Timeline, Open tabs. Search cards are written as `### [Search: …](url) · search`.
+- Text NODE cannot rebuild exactly from its data (a question's status and latest reply, a note's signature, a capture's source line, timeline lines) is kept as read, so export → import → export gives the same file for the sample and the prototype's trails (`test/fixtures/`).
+- Never in the file: removed cards, suggested groups and lines, sign-in and payment pages, screenshots (only the capture's text and source), private address parts and tracking codes (`cleanUrl`).
+- A file without layout comments still opens: groups one under another, their cards in rows of three, in file order. Bad files are refused with a message (no header, no `node-trail` line, a newer format, no name, a header that never ends).
+- Format 1 files (doc 19) are still read by `fromMarkdown`, and share links still use format 1.
+- **Share sheet:** File > Share Trail… in Menu > Trail. A note, Start here (an open question is chosen), what always goes in (cards, groups, links, with counts), Timeline (on, with how many pages are not on the canvas), Open tabs (off: which cards are open in a tab), a preview of the file, and Save File… ("Saved: name · n cards, n links"). `trail:share-text` gives the preview; `trail:share-save` writes the file. The page ticks and Create Link below are the share link (B82), shown only when the share server answers.
+
 ## Zoom ladder and Gallery (B107)
 
 - **Ladder:** `core/ladder.js` (no platform imports; the window loads it too as `NodeLadder`). Levels: page → Mosaic → Gallery → canvas. A trackpad pinch that zooms out (fingers together, "pinch in" in B72's words) climbs one level; one that zooms in goes back down. One level per gesture: a gesture ends after 400 ms without wheel events (`Gesture`). On a page, a pinch that starts on a zoomed page, or zooms in at 100%, zooms the page instead; ⌘+ and ⌘− also zoom the page. On the canvas a pinch zooms the canvas (B101), so the ladder stops there. `main.js` `onPinch` and `goLevel`; `layout:ladder` sets a level.

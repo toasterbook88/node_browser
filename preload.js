@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld("scout", {
   noteAdd: (url, text) => ipcRenderer.invoke("notes:add", url, text),
   trailSharePreview: () => ipcRenderer.invoke("trail:share-preview"),
   trailShareSave: (opts) => ipcRenderer.invoke("trail:share-save", opts),
+  trailShareText: (opts) => ipcRenderer.invoke("trail:share-text", opts),
   trailShowFile: (file) => ipcRenderer.invoke("trail:show-file", file),
   sharedChoose: () => ipcRenderer.invoke("trail:shared-choose"),
   sharedPreview: () => ipcRenderer.invoke("trail:shared-preview"),

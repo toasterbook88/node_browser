@@ -2747,13 +2747,29 @@ async function openShareSheet() {
   document.getElementById("share-reports-label").textContent = `Research reports (${p.reports})`;
   document.getElementById("share-reports").disabled = !p.reports;
   document.getElementById("share-reports").checked = p.reports > 0; // shared by default when there are any
-  document.getElementById("share-tabs-label").textContent = `Open tabs in this trail (${p.tabs})`;
-  document.getElementById("share-tabs").checked = false;
-  document.getElementById("share-tabs").disabled = !p.tabs;
+  document.getElementById("share-link-tabs-label").textContent = `Open tabs in this trail (${p.tabs})`;
+  document.getElementById("share-link-tabs").checked = false;
+  document.getElementById("share-link-tabs").disabled = !p.tabs;
   paintShareCount();
+  // The file (B108, node-trail v2): note, Start here, what goes in.
+  const f = p.file;
+  document.getElementById("share-note").value = "";
+  const start = document.getElementById("share-start");
+  start.innerHTML = "";
+  start.append(new Option("Nothing", ""));
+  for (const q of f.questions) start.append(new Option(`${q.title}${q.status === "resolved" ? " (resolved)" : ""}`, q.id));
+  start.value = f.questions.find((q) => q.status !== "resolved")?.id || "";
+  document.getElementById("share-always").textContent = `Always: ${plural(f.cards, "card", "cards")}, ${plural(f.groups, "group", "groups")} and ${plural(f.links, "link", "links")}.`;
+  document.getElementById("share-timeline").checked = true;
+  document.getElementById("share-timeline-label").textContent = `Timeline: ${plural(f.timeline, "page", "pages")} read${f.timelineOnly ? `, ${f.timelineOnly} of them not on the canvas` : ""}`;
+  document.getElementById("share-tabs-label").textContent = `Open tabs: which cards are open in a tab (${f.tabs})`;
+  document.getElementById("share-tabs").checked = false;
+  document.getElementById("share-tabs").disabled = !f.tabs;
+  paintSharePreview();
   document.getElementById("link-made").hidden = true;
-  // Create Link only when the share server answers.
+  // Share links (B82, unchanged): only when the share server answers.
   const linkOn = Boolean(await api.linkAvailable?.());
+  document.getElementById("share-link-box").hidden = !linkOn;
   document.getElementById("share-link").hidden = !linkOn;
   document.getElementById("link-about").hidden = !linkOn;
   document.getElementById("link-off").hidden = linkOn;
@@ -2773,11 +2789,25 @@ document.getElementById("share-open").addEventListener("click", openShareSheet);
 document.getElementById("share-cancel").addEventListener("click", () => (document.getElementById("share-sheet").hidden = true));
 document.getElementById("share-all").addEventListener("click", () => (shareBoxes().forEach((b) => (b.checked = true)), paintShareCount()));
 document.getElementById("share-none").addEventListener("click", () => (shareBoxes().forEach((b) => (b.checked = false)), paintShareCount()));
-// Share links (B82 phase 2): the same choices, uploaded encrypted.
+// The file's choices (B108).
+const fileChoices = () => ({
+  note: document.getElementById("share-note").value,
+  startHere: document.getElementById("share-start").value,
+  timeline: document.getElementById("share-timeline").checked,
+  tabs: document.getElementById("share-tabs").checked,
+});
+let previewSeq = 0;
+async function paintSharePreview() {
+  const seq = ++previewSeq;
+  const text = await api.trailShareText?.(fileChoices());
+  if (seq === previewSeq) document.getElementById("share-preview-text").textContent = text || "";
+}
+for (const id of ["share-note", "share-start", "share-timeline", "share-tabs"]) document.getElementById(id).addEventListener(id === "share-note" ? "input" : "change", paintSharePreview);
+// Share links (B82 phase 2): pages ticked, uploaded encrypted (format 1).
 const shareChoices = () => ({
   pages: shareBoxes().filter((b) => b.checked).map((b) => b.value),
   reports: document.getElementById("share-reports").checked,
-  tabs: document.getElementById("share-tabs").checked,
+  tabs: document.getElementById("share-link-tabs").checked,
 });
 const dayText = (ms) => new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" });
 document.getElementById("share-link").addEventListener("click", async () => {
@@ -2840,14 +2870,10 @@ async function paintLinks() {
 document.getElementById("share-save").addEventListener("click", async () => {
   const msg = document.getElementById("share-msg");
   msg.textContent = "";
-  const r = await api.trailShareSave({
-    pages: shareBoxes().filter((b) => b.checked).map((b) => b.value),
-    reports: document.getElementById("share-reports").checked,
-    tabs: document.getElementById("share-tabs").checked,
-  });
+  const r = await api.trailShareSave(fileChoices());
   if (r.canceled) return;
   if (!r.ok) return (msg.textContent = r.error);
-  msg.textContent = `Saved ${r.name}. Send it with any app: Messages, email, Telegram, Discord or AirDrop. `;
+  msg.textContent = `Saved: ${r.name} · ${plural(r.cards, "card", "cards")}, ${plural(r.links, "link", "links")}. Send it with any app: Messages, email, Telegram, Discord or AirDrop. `;
   const show = el("button", "link-btn", "Show in Folder");
   show.addEventListener("click", () => api.trailShowFile(r.file));
   msg.appendChild(show);
