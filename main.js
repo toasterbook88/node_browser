@@ -4059,11 +4059,35 @@ function sharedPreview() {
     trails: research.list().map((x) => ({ id: x.id, name: x.name, pages: x.current ? research.current.trail.length : x.pages, current: x.current, shared: (research.read(x.id)?.sharedId || "") === t.id && Boolean(t.id) })),
   };
 }
+// B109: a node-trail v2 file opens as a read-only trail on its canvas, with
+// the sender's note and Start here in the sidebar. Opening the same file
+// again goes back to that trail. A file that does not read opens nothing.
+// Format 2 or later goes to the v2 reader, which says when a file is too new.
+const isV2Text = (text) => /^node-trail:\s*([2-9]|\d{2,})\s*$/m.test(text.slice(0, 2000));
+function openTrailFileV2(file, text) {
+  let data;
+  try {
+    data = TrailFile.parseTrailMd(text);
+  } catch (err) {
+    sendUi("shared-trail", { payload: { error: `${path.basename(file)}: ${err.message}` } });
+    return { ok: false, error: err.message };
+  }
+  research.saveNow();
+  let opened;
+  changeTrail(() => {
+    opened = trailStore.importFile(data, { file, current: false });
+    return research.switchTo(opened.trail.id);
+  });
+  if (!canvasOn) showCanvas();
+  sendUi("trail-opened", { payload: trailSnapshot(opened.trail.id) });
+  return { ok: true, id: opened.trail.id };
+}
 function openSharedTrail(file) {
   let text = "";
   try {
     if (fs.statSync(file).size > SHARED_MAX) throw new Error("The file is too large for a trail (over 5 MB).");
     text = fs.readFileSync(file, "utf8");
+    if (isV2Text(text)) return openTrailFileV2(file, text);
     sharedTrail = { file, trail: TrailFile.fromMarkdown(text) };
   } catch (err) {
     sharedTrail = null;
@@ -4073,6 +4097,18 @@ function openSharedTrail(file) {
   sendUi("shared-trail", { payload: sharedPreview() });
   return { ok: true };
 }
+// Save as new trail: an editable copy of an opened file, in your trail list.
+// The file on disk is never written.
+ipcMain.handle("trail:save-as-new", () => {
+  const id = currentTrail();
+  if (!trailStore.has(id) || !trailStore.get(id).trail.readonly) return null;
+  let copy;
+  changeTrail(() => {
+    copy = trailStore.saveAsNew(id);
+    return research.switchTo(copy.trail.id);
+  });
+  return trailSnapshot(copy.trail.id);
+});
 async function chooseSharedTrail() {
   const r = await dialog.showOpenDialog(win, { title: "Open Shared Trail", properties: ["openFile"], filters: [{ name: "NODE trail", extensions: ["md"] }] });
   if (!r.canceled && r.filePaths[0]) openSharedTrail(r.filePaths[0]);

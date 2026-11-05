@@ -245,6 +245,17 @@ Each tab stores its resolved rule (`tab.rule`), recomputed on every navigation:
 - Format 1 files (doc 19) are still read by `fromMarkdown`, and share links still use format 1.
 - **Share sheet:** File > Share Trail… in Menu > Trail. A note, Start here (an open question is chosen), what always goes in (cards, groups, links, with counts), Timeline (on, with how many pages are not on the canvas), Open tabs (off: which cards are open in a tab), a preview of the file, and Save File… ("Saved: name · n cards, n links"). `trail:share-text` gives the preview; `trail:share-save` writes the file. The page ticks and Create Link below are the share link (B82), shown only when the share server answers.
 
+## Opening a trail file (B109)
+
+- ⌘O (Open trail file…), dropping a file anywhere in the window, Open With on a Mac and a path on the command line all go to `openSharedTrail` in `main.js`. A file with `node-trail: 2` or later goes to `parseTrailMd`; format 1 files keep the B82 preview with Open as New Trail and Merge.
+- `TrailStore.importFile(parsed, { file })` makes a read-only trail (`readonly`, `from`, `note`, `startHere`, `file`) with the file's cards, groups and links, and switches to it; the window shows its canvas. Its id comes from the file's trail id, sender and export time, so opening the same file again goes back to the same trail.
+- The sender's history becomes events marked `actor: <sender>`: each timeline line becomes an opened event (or placed, captured, asked, reported for cards) at its day and time, in the year the file was exported; cards not in the timeline get a placed event first; links and groups follow their cards. `events.jsonl` is written sorted.
+- Read only, in the store: `placePage`, `searchCard`, `bounce`, `removeCard`, `restoreCard` and `moveCard` do nothing, the canvas tools (`canvasEdit`) are refused, and `applySession` ignores the session view, so pages read and renames while the file is shown are not written into it. Only `view.json` (position, zoom, selection) changes.
+- In the window: the canvas tools and Remove from canvas are hidden; dragging a card, dropping a timeline row or running a search from the canvas bar shows "Read only. Save as new trail to change it." (Private search still works.) The sidebar shows a Read only block: from whom, the note, Start here (selects that card) and Save as new trail. `trail:list` gives `readonly`, `from`, `note`, `startHere`, `startTitle`.
+- **Save as new trail** (`trail:save-as-new`, `TrailStore.saveAsNew`): an editable copy named "<name> · <sender>" with the same cards, groups, links, events and view, and switches to it. The file on disk is never written.
+- A file that does not read (a newer format, no header, no name) opens nothing; the shared-trail sheet says "This file could not be opened" with the reason.
+- Starting on Replay step 1 comes with B110.
+
 ## Zoom ladder and Gallery (B107)
 
 - **Ladder:** `core/ladder.js` (no platform imports; the window loads it too as `NodeLadder`). Levels: page → Mosaic → Gallery → canvas. A trackpad pinch that zooms out (fingers together, "pinch in" in B72's words) climbs one level; one that zooms in goes back down. One level per gesture: a gesture ends after 400 ms without wheel events (`Gesture`). On a page, a pinch that starts on a zoomed page, or zooms in at 100%, zooms the page instead; ⌘+ and ⌘− also zoom the page. On the canvas a pinch zooms the canvas (B101), so the ladder stops there. `main.js` `onPinch` and `goLevel`; `layout:ladder` sets a level.
