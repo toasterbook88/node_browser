@@ -1,0 +1,14 @@
+# NODE Research Browser
+
+> NODE Research Browser is a free, open-source desktop browser for Mac, Windows and Linux. It maps what you read on a canvas, and you send the whole trail to a friend or a small group as one Markdown file. They open it in NODE read only, replay how it was built, and save their own copy.
+
+## Pages
+
+- [Home](https://noderesearch.app/): what NODE does, downloads, privacy and questions
+- [Sample trail](https://noderesearch.app/sample): a real shared trail, with Replay, viewable without installing
+- [Sample trail file](https://noderesearch.app/sourdough-starters.trail.md): the same trail as the plain Markdown file NODE shares
+
+## Project
+
+- [Source code](https://github.com/westernCasa/node_browser): MIT licence
+- [Releases](https://github.com/westernCasa/node_browser/releases/latest): installers for macOS, Windows and Linux
