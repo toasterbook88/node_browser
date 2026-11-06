@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8" />
+  <title>NODE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="canvas-page.css" />
+</head>
+<!-- The trail canvas as a NODE page (B112): every new tab. The canvas itself
+     is the Electron build's renderer/canvas.js; this page adds a sidebar with
+     the trail switcher, the opened-file block, the timeline and Replay. -->
+<body class="cp">
+  <nav class="cp-side" aria-label="Trail">
+    <div class="cp-switch">
+      <label class="sb-label" for="cp-trail">Trail</label>
+      <select id="cp-trail" aria-label="Trail"></select>
+      <div class="cp-row">
+        <button type="button" class="chip" id="cp-new">New trail</button>
+        <button type="button" class="chip" id="cp-open">Open trail file…</button>
+        <input type="file" id="cp-file" accept=".md,text/markdown" hidden />
+      </div>
+    </div>
+    <section class="sb-opened" id="sb-opened" aria-labelledby="sb-opened-title" hidden>
+      <div class="sb-opened-head"><span class="sb-label" id="sb-opened-title">Read only</span><span class="sb-meta" id="sb-opened-from"></span></div>
+      <p class="sb-opened-note" id="sb-opened-note" hidden></p>
+      <button type="button" class="sb-opened-start" id="sb-opened-start" hidden><span class="sb-label">Start here</span><span class="nm" id="sb-opened-start-name"></span></button>
+      <button type="button" class="chip" id="sb-opened-save">Save as new trail</button>
+    </section>
+    <p class="cp-msg" id="cp-msg" role="status" hidden></p>
+    <section class="sb-timeline" id="sb-timeline" aria-labelledby="sb-timeline-title">
+      <div class="sb-tabs-head"><span class="sb-label" id="sb-timeline-title">Timeline</span><span class="sb-meta" id="sb-timeline-count"></span></div>
+      <div class="cp-timeline" id="cp-timeline"></div>
+    </section>
+    <section class="sb-replay" id="sb-replay" aria-labelledby="sb-replay-title" hidden>
+      <div class="sb-tabs-head"><span class="sb-label" id="sb-replay-title">Replay</span><span class="sb-grow"></span><button type="button" class="chip" id="sb-replay-end">End</button></div>
+      <div class="sb-replay-bar" aria-hidden="true"><span id="sb-replay-progress"></span></div>
+      <div class="sb-replay-ctl">
+        <button type="button" class="chip" id="sb-replay-prev" aria-label="Previous step" title="Previous step (←)">←</button>
+        <button type="button" class="chip" id="sb-replay-play" aria-label="Play" title="Play or pause (Space)">Play</button>
+        <button type="button" class="chip" id="sb-replay-next" aria-label="Next step" title="Next step (→)">→</button>
+        <span class="sb-meta" id="sb-replay-count" aria-live="polite"></span>
+      </div>
+      <div class="sb-replay-list" id="sb-replay-list" role="list"></div>
+    </section>
+  </nav>
+  <section id="canvas" aria-label="Trail canvas"></section>
+
+  <dialog class="cp-share" id="cp-share" aria-labelledby="cp-share-title">
+    <form method="dialog" class="cp-share-form">
+      <h2 class="sb-label" id="cp-share-title">Share trail</h2>
+      <label class="cp-field"><span class="sb-label">Note</span><textarea id="cp-share-note" rows="3" maxlength="300" placeholder="What should they know first?"></textarea></label>
+      <label class="cp-field"><span class="sb-label">Start here</span><select id="cp-share-start"></select></label>
+      <p class="sb-meta" id="cp-share-always"></p>
+      <label class="cp-check"><input type="checkbox" id="cp-share-timeline" checked /> <span id="cp-share-timeline-label">Timeline</span></label>
+      <details class="cp-preview"><summary class="sb-label">Preview</summary><pre id="cp-share-preview"></pre></details>
+      <p class="sb-meta" id="cp-share-msg" role="status"></p>
+      <div class="cp-row">
+        <button type="button" class="chip" id="cp-share-save">Save file</button>
+        <button type="submit" class="chip" id="cp-share-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="canvas.js"></script>
+  <script src="canvas-page.js"></script>
+</body>
+</html>
