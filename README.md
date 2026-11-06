@@ -4,7 +4,7 @@
 
 ![NODE Research Browser showing a trail someone shared: cards grouped and linked on a canvas, with their note and a Start here question in the sidebar](docs/media/canvas.png)
 
-NODE Research Browser (NODE for short) is a desktop browser for knowledge networking. It maps what you read on a canvas, and you send the whole trail to a friend or a small group as one file or link. They open it in NODE, or read it in any browser, replay how you built it, and keep going from there. NODE also reads the page you are on, picks out its keywords, and suggests the next pages to read.
+NODE Research Browser (NODE for short) is a desktop browser for knowledge networking. It maps what you read on a canvas, and you send the whole trail to a friend or a small group as one file. They open it in NODE, replay how you built it, and save their own copy to keep going. NODE also reads the page you are on, picks out its keywords, and suggests the next pages to read.
 
 Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: released, version 0.10.0, updated often.
 
