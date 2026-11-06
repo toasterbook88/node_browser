@@ -4477,7 +4477,13 @@ ipcMain.handle("library:grab", async (_e, id, explicitUrl) => {
     throw new Error("This media has no address to download.");
   }
   if (!/^https?:$/.test(target.protocol)) throw new Error("Only http and https media can be saved.");
-  if (isPrivateHost(target.hostname)) throw new Error("Media on this computer or the local network cannot be saved.");
+  // A page that is itself on this computer or the local network (a local
+  // development server, a NAS) may save its own media from there.
+  let pageHost = "";
+  try {
+    pageHost = new URL(tab.view.webContents.getURL()).hostname;
+  } catch (_) {}
+  if (isPrivateHost(target.hostname) && !(pageHost && isPrivateHost(pageHost))) throw new Error("Media on this computer or the local network cannot be saved.");
   const res = await fetch(target.href, { headers: { "User-Agent": USER_AGENT, Referer: tab.view.webContents.getURL() } });
   if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`);
   const buf = Buffer.from(await res.arrayBuffer());
