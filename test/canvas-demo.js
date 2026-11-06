@@ -64,10 +64,13 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs $
 
 // The dot grid lines up with world points and thins out below 50%.
 {
-  const g = C.gridFor({ x: 30, y: -10, z: 1 });
+  const g = C.gridFor({ x: 30, y: -10, z: 1 }, 1);
   assert.deepStrictEqual(g, { gap: 24, ox: 6, oy: 14 });
   assert.strictEqual(C.gridFor({ x: 0, y: 0, z: 0.4 }).gap, 24 * 0.4 * 2);
-  ok("dots sit 24 px apart at 100% and on the same world points as the canvas moves");
+  ok("dots sit 24 px apart at 100%; with depth 1 they move with the canvas");
+  // B113: by default the dots move 1.25 times as far as the canvas.
+  assert.deepStrictEqual(C.gridFor({ x: 8, y: -8, z: 1 }), { gap: 24, ox: 10, oy: 14 });
+  ok("with depth (the default) the dots move 1.25 times as far: 8 px of pan moves them 10 px");
 }
 
 console.log(`\n${n} checks passed`);
