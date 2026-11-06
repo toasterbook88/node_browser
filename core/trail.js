@@ -24,7 +24,7 @@ const GROUP_TOP = 48; // and top, where the name sits
 const SESSION_GAP_MS = 30 * 60 * 1000; // a gap of more than 30 minutes starts a new session
 const ENGAGED_MS = 20 * 1000; // the 20-second rule (doc 23); a starting guess
 const EVENT_TYPES = new Set(["opened", "bounced", "captured", "asked", "reported", "noted", "placed", "removed", "linked", "unlinked", "grouped", "renamed", "resolved", "moved"]);
-const CARD_KINDS = new Set(["page", "video", "capture", "report", "question", "note", "voice", "search"]);
+const CARD_KINDS = new Set(["page", "video", "capture", "report", "question", "note", "voice", "search", "media"]);
 const LINE_KINDS = new Set(["nav", "auto", "you", "suggested"]);
 const LINE_LABELS = new Set(["", "supports", "contradicts", "answers", "raises"]);
 // Card sizes at 100% zoom, by kind (handoff: cards 240-260 px wide).
@@ -37,9 +37,24 @@ const SIZE = {
   note: [260, 150],
   voice: [260, 170],
   search: [260, 140],
+  media: [300, 240],
 };
+// Media cards (B114): image, screenshot, video and audio from the Library.
+const MEDIA_KINDS = new Set(["image", "screenshot", "video", "audio"]);
+const MEDIA_SIZE = { image: [300, 240], screenshot: [300, 220], video: [320, 240], audio: [280, 130] };
 // Pages that are not research reading (start pages, search results).
 const NOT_READING = /wikipedia\.org\/wiki\/(Main_Page|Special:)|duckduckgo\.com\/(\?|html)|google\.[a-z.]+\/search|bing\.com\/search|search\.brave\.com\/search/i;
+
+// The kind of media a Library file is, from its name (and "shot" for
+// screenshots), or null for other files.
+function mediaKindOf(name, kind = "") {
+  if (kind === "shot") return "screenshot";
+  const n = String(name || "");
+  if (/\.(png|jpe?g|gif|webp|avif|svg|heic)$/i.test(n)) return "image";
+  if (/\.(mp4|webm|ogv|mov|m4v)$/i.test(n)) return "video";
+  if (/\.(mp3|m4a|wav|ogg|oga|aac|flac|opus)$/i.test(n)) return "audio";
+  return null;
+}
 
 function newId() {
   return new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14) + "-" + Math.random().toString(36).slice(2, 6);
@@ -431,6 +446,39 @@ class TrailStore {
     const row = rows.find((r) => r.url === url);
     const card = this.addCard(id, { kind: "page", url, title: String(title || row?.title || url).slice(0, 300), keywords: (keywords.length ? keywords : row?.keywords || []).slice(0, 6), placedAt: at, x: pos.x, y: pos.y }, { at, data: { url, reason } });
     if (card && source && !source.removed) this.link(id, source.id, card.id, { kind: "nav", at });
+    return card;
+  }
+  // ---- media cards (B114) ----
+  // An image, screenshot, video or audio file from the Library on the canvas.
+  // lib: the Library item's id (the file stays in the Library, on this
+  // computer). src: where the media came from on the web, if anywhere (a
+  // shared file links to it). url: the page it was saved from: the card goes
+  // next to that page's card, with a "captured from" line. The same Library
+  // item is one card; putting it on again brings it back.
+  mediaCard(id, { lib = "", media, title = "", src = "", url = "", near, x, y, at = this.now() } = {}) {
+    const d = this.get(id);
+    if (!d || d.trail.readonly || !MEDIA_KINDS.has(media)) return null;
+    if (url && isSensitiveUrl(url)) url = "";
+    if (src && (isSensitiveUrl(src) || !/^https?:/i.test(src))) src = "";
+    if (!lib && !src) return null;
+    const have = d.cards.find((c) => c.kind === "media" && ((lib && c.lib === lib) || (!lib && src && c.src === src)));
+    if (have && !have.removed) return have;
+    if (have) return this.restoreCard(id, have.id, { at, x, y });
+    const [w, h] = MEDIA_SIZE[media];
+    const source = url ? this.pageCard(id, url) : null;
+    let pos = typeof x === "number" && typeof y === "number" ? { x: Math.round(x), y: Math.round(y), moves: [] } : null;
+    if (!pos) {
+      pos = placeNear({ cards: d.cards.filter((c) => !c.removed), groups: d.groups }, source && !source.removed ? source : null, w, h, { near: near || this.below(id, w) });
+      for (const m of pos.moves) {
+        const o = (m.kind === "group" ? d.groups : d.cards).find((k) => k.id === m.id);
+        if (!o) continue;
+        if (typeof m.y === "number") o.y = m.y;
+        if (typeof m.h === "number") o.h = m.h;
+      }
+    }
+    const name = String(title || "").trim().slice(0, 300) || { image: "Image", screenshot: "Screenshot", video: "Video", audio: "Audio" }[media];
+    const card = this.addCard(id, { kind: "media", media, title: name, lib: lib || undefined, src: src || undefined, url: url || undefined, placedAt: at, w, h, x: pos.x, y: pos.y }, { at, event: "captured", data: { media, url, src } });
+    if (card && source && !source.removed) this.link(id, source.id, card.id, { kind: "auto", label: "captured from", at });
     return card;
   }
   // ---- search cards (B106) ----
@@ -842,6 +890,16 @@ class TrailStore {
   }
   captureCard(id, cap, { place } = {}) {
     if (isSensitiveUrl(cap.url)) return null;
+    // B114: a screenshot or media file saved to the Library is a media card,
+    // shown on the canvas. Made once; a removed one stays removed.
+    const media = cap.libraryId ? mediaKindOf(cap.name, cap.kind) : null;
+    if (media) {
+      const have = (this.get(id)?.cards || []).find((c) => c.kind === "media" && c.lib === cap.libraryId);
+      if (have) return have;
+      const host = cap.url ? hostOf(cap.url) : "";
+      const word = { image: "Image", screenshot: "Screenshot", video: "Video", audio: "Audio" }[media];
+      return this.mediaCard(id, { lib: cap.libraryId, media, title: cap.title || (host ? `${word} from ${host}` : word), src: cap.src || "", url: cap.url || "", at: cap.at || this.now(), ...(place || {}) });
+    }
     const cid = hashId("c", cap.libraryId || "", String(cap.at || ""), cap.name || "");
     if (this.card(id, cid)) return this.card(id, cid);
     const c = this.addCard(id, { id: cid, kind: "capture", quote: "", source: cap.url ? hostOf(cap.url) : "", url: cap.url || "", title: cap.title || cap.name || "", time: cap.at || this.now(), device: this.device, shot: cap.kind === "shot" ? cap.name : "", libraryId: cap.libraryId || "", captureKind: cap.kind || "shot", ...(place || {}) }, { at: cap.at || this.now(), event: "captured", data: { url: cap.url || "" } });
@@ -1015,4 +1073,4 @@ function sessionStorageOver(store) {
   };
 }
 
-module.exports = { TrailStore, migrateSessions, sessionStorageOver, monogram, hashId, SIZE, ENGAGED_MS, SESSION_GAP_MS, EVENT_TYPES, CARD_KINDS, LINE_KINDS };
+module.exports = { TrailStore, migrateSessions, sessionStorageOver, monogram, hashId, mediaKindOf, SIZE, MEDIA_KINDS, MEDIA_SIZE, ENGAGED_MS, SESSION_GAP_MS, EVENT_TYPES, CARD_KINDS, LINE_KINDS };

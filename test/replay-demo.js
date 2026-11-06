@@ -91,7 +91,15 @@ ok("a caption per event type (opened, opened from, timeline only, note, link, gr
   assert.strictEqual(stepCaption({ kind: "resolve", card: "q", actor: "me", conclusion: "Keep it above 24 °C." }, { byId }), "You resolved “Why do starters fail?”: Keep it above 24 °C.");
   assert.strictEqual(stepCaption({ kind: "resolve", card: "q", actor: "me", reopened: true }, { byId }), "You reopened “Why do starters fail?”.".replace("?”.", "?”"));
   assert.strictEqual(stepCaption({ kind: "visit", actor: "Sven", visitTitle: "Sourdough" }, {}), "Sven visited “Sourdough”. It stayed in the timeline only.");
-  ok("captions for captures (with NODE's line once both ends show), reports, questions, searches, voice notes, resolves");
+  const media = new Map([
+    ["i", { id: "i", kind: "media", media: "image", title: "Crumb", url: "https://www.example.com/bread" }],
+    ["s", { id: "s", kind: "media", media: "screenshot", title: "Bread page" }],
+    ["v", { id: "v", kind: "media", media: "video", title: "Fold" }],
+    ["a", { id: "a", kind: "media", media: "audio", title: "Mic test" }],
+  ]);
+  const sayM = (card) => stepCaption({ kind: "card", card, actor: "me" }, { byId: media, lines: [], seen: new Set([card]) });
+  assert.deepStrictEqual(["i", "s", "v", "a"].map(sayM), ["You saved an image from example.com: “Crumb”.", "You took a screenshot: “Bread page”.", "You saved a video clip: “Fold”.", "You saved audio: “Mic test”."]);
+  ok("captions for captures (with NODE's line once both ends show), reports, questions, searches, voice notes, resolves, and media cards (B114)");
 }
 
 {

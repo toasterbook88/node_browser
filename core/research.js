@@ -340,11 +340,11 @@ class ResearchStore {
 
   // A screenshot, saved page or saved media file taken during this session.
   // The file lives in the Library; the session keeps a link to it.
-  capture({ libraryId, kind, name, url, title }) {
+  capture({ libraryId, kind, name, url, title, src }) {
     // The file stays in the Library; a sign-in or payment page is not linked into the session.
     if (isSensitiveUrl(url)) return;
     const list = (this.current.captures = this.current.captures || []);
-    list.push({ at: Date.now(), libraryId: String(libraryId || ""), kind: String(kind || "shot"), name: String(name || ""), url: String(url || ""), title: String(title || "").slice(0, 300) });
+    list.push({ at: Date.now(), libraryId: String(libraryId || ""), kind: String(kind || "shot"), name: String(name || ""), url: String(url || ""), title: String(title || "").slice(0, 300), ...(/^https?:/i.test(src || "") ? { src: String(src) } : {}) });
     if (list.length > 500) list.splice(0, list.length - 500);
     // A page captured counts as read, even if NODE had not recorded it yet.
     if (/^https?:/i.test(url || "") && !this.current.trail.some((r) => r.url === url)) this.visit(url, title);

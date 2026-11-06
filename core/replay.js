@@ -181,6 +181,15 @@ function stepCaption(st, ctx) {
   else if (c.kind === "note") t = `${w} wrote a note: ${q(title)}`;
   else if (c.kind === "voice") t = `${w} recorded a voice note.`;
   else if (c.kind === "search") t = `${w} searched: ${q(title)}.`;
+  else if (c.kind === "media") {
+    const from = site(c.url) ? ` from ${site(c.url)}` : "";
+    t = {
+      screenshot: `${w} took a screenshot${from}: ${q(title)}.`,
+      image: `${w} saved an image${from}: ${q(title)}.`,
+      video: `${w} saved a video clip${from}: ${q(title)}.`,
+      audio: `${w} saved audio${from}: ${q(title)}.`,
+    }[c.media] || `${w} saved ${q(title)}.`;
+  }
   else t = `${w} added ${q(title)}.`;
   // Lines NODE drew to cards already shown (captured or reported from).
   const auto = lines.filter((l) => l.kind === "auto" && ((l.from === c.id && seen.has(l.to)) || (l.to === c.id && seen.has(l.from))));

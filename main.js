@@ -35,7 +35,7 @@ const Rules = require("./core/rules");
 const AI = require("./core/ai");
 const Chat = require("./core/chat");
 const { ResearchStore } = require("./core/research");
-const { TrailStore, migrateSessions, sessionStorageOver } = require("./core/trail");
+const { TrailStore, migrateSessions, sessionStorageOver, mediaKindOf } = require("./core/trail");
 const Replay = require("./core/replay");
 const { Usage } = require("./core/usage");
 const { HistoryStore } = require("./core/history");
@@ -3692,8 +3692,11 @@ function stamp(prefix, ext) {
 
 function addRecord(folder, name, sourceUrl, note) {
   const rows = readIndex();
+  // Ids are the time saved; two saves in the same millisecond get the next one.
+  let n = Date.now();
+  while (rows.some((r) => r.id === String(n))) n++;
   const item = {
-    id: String(Date.now()),
+    id: String(n),
     folder,
     name,
     file: path.join(libraryRoot(), folder, name),
@@ -3709,7 +3712,7 @@ function addRecord(folder, name, sourceUrl, note) {
   const kind = { screenshots: "shot", saves: "save", media: "media" }[folder];
   if (research && kind && /^https?:/i.test(sourceUrl || "")) {
     engageUrl(sourceUrl, "capture"); // B104: a page captured from becomes a card
-    research.capture({ libraryId: item.id, kind, name, url: sourceUrl, title: folder === "media" ? "" : note });
+    research.capture({ libraryId: item.id, kind, name, url: sourceUrl, title: folder === "media" ? "" : note, src: folder === "media" ? note : "" });
     usage().count("captures");
   }
   return item;
@@ -4305,9 +4308,85 @@ app.on("before-quit", (e) => {
 });
 
 ipcMain.handle("library:root", () => libraryRoot());
+
+// ---- B114: Library media on the canvas ----
+// A Library item as a media card in the current trail: from Put on canvas or
+// a drag from the Library (at: where it was dropped, in world units).
+function libraryMedia(item) {
+  return mediaKindOf(item.name, item.folder === "screenshots" ? "shot" : "");
+}
+function placeLibraryItem(item, at) {
+  const media = libraryMedia(item);
+  if (!item || !media) return null;
+  const pos = at && Number.isFinite(at.x) && Number.isFinite(at.y) ? { x: Math.round(at.x), y: Math.round(at.y) } : {};
+  const host = /^https?:/i.test(item.sourceUrl || "") ? hostOf(item.sourceUrl) : "";
+  const word = { image: "Image", screenshot: "Screenshot", video: "Video", audio: "Audio" }[media];
+  const title = item.folder === "media" ? item.title || (host ? `${word} from ${host}` : word) : item.note || item.title || word;
+  return canvasEdit((id) =>
+    trailStore.mediaCard(id, {
+      lib: item.id,
+      media,
+      title,
+      src: item.folder === "media" && /^https?:/i.test(item.note || "") ? item.note : "",
+      url: /^https?:/i.test(item.sourceUrl || "") ? item.sourceUrl : "",
+      near: canvasMiddle(id),
+      ...pos,
+    })
+  );
+}
+ipcMain.handle("library:place", (_e, libId, at) => {
+  const item = readIndex().find((r) => r.id === String(libId));
+  const out = item && placeLibraryItem(item, at);
+  if (out) sendUi("trail-changed", { trail: currentTrail(), card: out.result.id });
+  return out;
+});
+// Image, video and audio files dropped on the canvas from Finder or Explorer:
+// copied into the Library ("media"), then placed where they were dropped,
+// side by side. Other files are skipped. Up to 20 files, 2 GB each.
+const IMPORT_MAX = 2 * 1024 * 1024 * 1024;
+ipcMain.handle("library:import", async (_e, files, at) => {
+  const placed = [];
+  const skipped = [];
+  const cur = currentTrail();
+  if (!trailStore?.has(cur) || trailStore.get(cur).trail.readonly) return { placed, skipped, readonly: true };
+  let dx = 0;
+  for (const file of (Array.isArray(files) ? files : []).slice(0, 20)) {
+    const f = String(file || "");
+    const media = mediaKindOf(path.basename(f));
+    let size = 0;
+    try {
+      size = fs.statSync(f).size;
+    } catch (_) {}
+    if (!media || !size || size > IMPORT_MAX) {
+      skipped.push(path.basename(f));
+      continue;
+    }
+    const ext = path.extname(f).slice(1).toLowerCase();
+    let name = stamp("media", ext);
+    for (let k = 2; fs.existsSync(path.join(libraryRoot(), "media", name)); k++) name = stamp(`media-${k}`, ext);
+    await fs.promises.copyFile(f, path.join(libraryRoot(), "media", name));
+    const item = addRecord("media", name, "", "");
+    const title = path.basename(f, path.extname(f)).slice(0, 200);
+    // Keep the file's own name as the Library title.
+    const rows = readIndex();
+    const row = rows.find((r) => r.id === item.id);
+    if (row) {
+      row.title = title;
+      writeIndex(rows);
+    }
+    const out = placeLibraryItem({ ...item, title }, at ? { x: at.x + dx, y: at.y } : null);
+    if (out) {
+      placed.push(out.result.id);
+      dx += out.result.w + 24;
+    }
+  }
+  if (placed.length) sendUi("trail-changed", { trail: currentTrail() });
+  return { placed, skipped, snap: placed.length ? trailSnapshot(currentTrail()) : null };
+});
 ipcMain.handle("library:list", () =>
   readIndex().map((item) => ({
     ...item,
+    media: libraryMedia(item),
     // The id goes in the path: a numeric host would be read as an IP address.
     mediaUrl: `scoutlib://item/${item.id}`,
     kind: /\.(mp4|webm|ogv|mov|m4v)$/i.test(item.name)
