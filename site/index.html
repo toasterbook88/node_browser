@@ -417,16 +417,19 @@ code{font:400 13px/20px var(--mono)}
 })();
 </script>
 <script>
-/* Dot field: fills the left column; dots near the pointer brighten and move aside. */
+/* Dot field: fills the left column. A slow band of light sweeps across it;
+   with a mouse, dots near the pointer brighten and move aside. */
 (function(){
   var cv=document.getElementById("dots"), side=document.querySelector(".side");
   if(!cv||!side||!cv.getContext)return;
-  var ctx=cv.getContext("2d"), still=matchMedia("(prefers-reduced-motion: reduce)").matches||!matchMedia("(hover: hover) and (pointer: fine)").matches;
-  var GAP=18, R=1, REACH=110, PUSH=10, dots=[], W=0, H=0, dpr=1, px=-1e4, py=-1e4, raf=0, wide=true;
+  var ctx=cv.getContext("2d");
+  var reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var fine=matchMedia("(hover: hover) and (pointer: fine)").matches;
+  var GAP=18, R=1, REACH=110, PUSH=10, SWEEP=3600, REST=3400, BAND=70, GLOW=.6;
+  var dots=[], W=0, H=0, dpr=1, px=-1e4, py=-1e4, raf=0, seen=true, t0=performance.now();
   var base=[42,42,45], hot=[161,161,166];
   function layout(){
-    wide=innerWidth>=900;
-    var b=side.getBoundingClientRect();
+    var wide=innerWidth>=900, b=side.getBoundingClientRect();
     W=Math.ceil(b.right); H=wide?innerHeight:Math.ceil(b.height);
     cv.style.top=wide?"0px":(b.top+scrollY)+"px";
     dpr=Math.min(devicePixelRatio||1,2);
@@ -435,33 +438,38 @@ code{font:400 13px/20px var(--mono)}
     dots=[];
     var ox=(W%GAP)/2+GAP/2, oy=(H%GAP)/2+GAP/2;
     for(var y=oy;y<H;y+=GAP)for(var x=ox;x<W-GAP/2;x+=GAP)dots.push({x:x,y:y,dx:0,dy:0,t:0});
-    draw(true);
+    frame(performance.now(),true);
   }
-  function draw(snap){
+  function frame(now,snap){
     ctx.clearRect(0,0,W,H);
-    var moving=false;
+    // Shimmer band position along the diagonal (x + y), or off the field while resting.
+    var span=W+H+BAND*4, ph=(now-t0)%(SWEEP+REST), band=-1e5;
+    if(!reduce&&ph<SWEEP){var e=ph/SWEEP;e=e<.5?2*e*e:1-Math.pow(-2*e+2,2)/2;band=e*span-BAND*2}
     for(var i=0;i<dots.length;i++){
-      var d=dots[i], vx=d.x-px, vy=d.y-py, dist=Math.sqrt(vx*vx+vy*vy), k=0, tx=0, ty=0;
-      if(!still&&dist<REACH){k=1-dist/REACH;k=k*k;var f=PUSH*k/(dist||1);tx=vx*f;ty=vy*f}
+      var d=dots[i], k=0, tx=0, ty=0;
+      if(fine&&!reduce){
+        var vx=d.x-px, vy=d.y-py, dist=Math.sqrt(vx*vx+vy*vy);
+        if(dist<REACH){k=1-dist/REACH;k=k*k;var f=PUSH*k/(dist||1);tx=vx*f;ty=vy*f}
+      }
       if(snap){d.dx=tx;d.dy=ty;d.t=k}else{d.dx+=(tx-d.dx)*.18;d.dy+=(ty-d.dy)*.18;d.t+=(k-d.t)*.18}
-      if(Math.abs(tx-d.dx)>.05||Math.abs(k-d.t)>.005)moving=true;
-      var c=d.t, rr=R+c*.8;
+      var g=(d.x+d.y)-band, sh=GLOW*Math.exp(-(g*g)/(2*BAND*BAND));
+      var c=Math.max(d.t,sh), rr=R+d.t*.8+sh*.4;
       ctx.fillStyle="rgb("+Math.round(base[0]+(hot[0]-base[0])*c)+","+Math.round(base[1]+(hot[1]-base[1])*c)+","+Math.round(base[2]+(hot[2]-base[2])*c)+")";
       ctx.beginPath();ctx.arc(d.x+d.dx,d.y+d.dy,rr,0,6.2832);ctx.fill();
     }
-    return moving;
   }
-  function tick(){raf=0;if(draw(false))raf=requestAnimationFrame(tick)}
-  function kick(){if(!raf&&!still)raf=requestAnimationFrame(tick)}
-  addEventListener("pointermove",function(e){
-    if(e.pointerType==="touch")return;
-    var b=cv.getBoundingClientRect(); px=e.clientX-b.left; py=e.clientY-b.top; kick();
+  function tick(now){raf=0;if(!seen||document.hidden)return;frame(now,false);raf=requestAnimationFrame(tick)}
+  function start(){if(!raf&&!reduce&&seen&&!document.hidden)raf=requestAnimationFrame(tick)}
+  if(fine)addEventListener("pointermove",function(e){
+    var b=cv.getBoundingClientRect(); px=e.clientX-b.left; py=e.clientY-b.top;
   },{passive:true});
-  document.addEventListener("pointerleave",function(){px=py=-1e4;kick()});
-  addEventListener("blur",function(){px=py=-1e4;kick()});
+  document.addEventListener("pointerleave",function(){px=py=-1e4});
+  addEventListener("blur",function(){px=py=-1e4});
+  document.addEventListener("visibilitychange",start);
+  if("IntersectionObserver" in window)new IntersectionObserver(function(es){seen=es[0].isIntersecting;start()}).observe(cv);
   var to;addEventListener("resize",function(){clearTimeout(to);to=setTimeout(layout,120)});
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);
-  layout();
+  layout();start();
 })();
 </script>
 </body>
