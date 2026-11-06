@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NODE Research Browser</title>
-<meta name="description" content="NODE Research Browser is a free desktop browser for Mac, Windows and Linux that reads the page you are on and suggests what to read next.">
+<meta name="description" content="NODE Research Browser is a free desktop browser for Mac, Windows and Linux that maps what you read and lets you share it with the people you research with.">
 <link rel="canonical" href="https://noderesearch.app/">
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -15,17 +15,17 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="NODE Research Browser">
 <meta property="og:title" content="NODE Research Browser">
-<meta property="og:description" content="Reads the page you are on and suggests what to read next. Free and open source for Mac, Windows and Linux.">
+<meta property="og:description" content="Map what you read on a canvas and send the whole trail to a friend or a group. Free and open source for Mac, Windows and Linux.">
 <meta property="og:url" content="https://noderesearch.app/">
 <meta property="og:image" content="https://noderesearch.app/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="NODE Research Browser. Read one page. Find the next ten.">
+<meta property="og:image:alt" content="NODE Research Browser. Send the whole trail.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="NODE Research Browser">
-<meta name="twitter:description" content="Reads the page you are on and suggests what to read next. Free and open source.">
+<meta name="twitter:description" content="Map what you read and send the whole trail to the people you research with. Free and open source.">
 <meta name="twitter:image" content="https://noderesearch.app/og.png">
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "NODE Research Browser", "alternateName": "NODE", "url": "https://noderesearch.app/", "description": "NODE Research Browser is a free desktop browser for Mac, Windows and Linux that reads the page you are on and suggests what to read next.", "applicationCategory": "BrowserApplication", "operatingSystem": "macOS, Windows, Linux", "softwareVersion": "0.9.9", "datePublished": "2026-10-28", "license": "https://opensource.org/licenses/MIT", "downloadUrl": "https://github.com/westernCasa/node_browser/releases/latest", "codeRepository": "https://github.com/westernCasa/node_browser", "image": "https://noderesearch.app/og.png", "screenshot": "https://noderesearch.app/img/suggestions.webp", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "author": {"@type": "Person", "name": "Isaac Sven Manzanarez", "url": "https://productdesign.digital/"}}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "NODE Research Browser", "alternateName": "NODE", "url": "https://noderesearch.app/", "description": "NODE Research Browser is a free desktop browser for Mac, Windows and Linux that maps what you read and lets you share it with the people you research with.", "applicationCategory": "BrowserApplication", "operatingSystem": "macOS, Windows, Linux", "softwareVersion": "0.10.0", "datePublished": "2026-11-05", "license": "https://opensource.org/licenses/MIT", "downloadUrl": "https://github.com/westernCasa/node_browser/releases/latest", "codeRepository": "https://github.com/westernCasa/node_browser", "image": "https://noderesearch.app/og.png", "screenshot": "https://noderesearch.app/img/canvas-shared.webp", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "author": {"@type": "Person", "name": "Isaac Sven Manzanarez", "url": "https://productdesign.digital/"}}</script>
 <style>
 @font-face{font-family:"Barlow";font-weight:400;font-style:normal;font-display:swap;src:url(/fonts/barlow-latin-400-normal.woff2) format("woff2")}
 @font-face{font-family:"Barlow";font-weight:600;font-style:normal;font-display:swap;src:url(/fonts/barlow-latin-600-normal.woff2) format("woff2")}
@@ -105,6 +105,9 @@ section{padding-block:var(--space-6);border-top:1px solid var(--line);display:fl
 
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .list li{display:grid;grid-template-columns:16px minmax(0,180px) minmax(0,1fr);gap:var(--space-3);align-items:baseline;padding-block:var(--space-3);border-top:1px solid var(--line)}
+.steps li .tele{transform:none;color:var(--ink-muted)}
+.steps li{grid-template-columns:24px minmax(0,180px) minmax(0,1fr)}
+@media (max-width:560px){.steps li{grid-template-columns:24px minmax(0,1fr)}}
 .list li .mark{width:12px;height:12px;transform:translateY(1px)}
 
 .rows{display:grid;grid-template-columns:max-content minmax(0,1fr);margin:0}
@@ -150,13 +153,13 @@ code{font:400 13px/20px var(--mono)}
   <aside class="side">
     <h1 class="brand-h1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 647 140" class="lockup" aria-hidden="true"><g fill="currentColor"><g transform="translate(100,100) scale(5.83333)"><path transform="matrix(1.20193,0,0,1.20193,-1.2237,-2.42319)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"></path></g><path d="M407.85714285714283 120.0H424.57142857142856Q425.2857142857143 120.0 425.7857142857143 120.5Q426.2857142857143 121.0 426.2857142857143 121.71428571428572V218.28571428571428Q426.2857142857143 219.0 425.7857142857143 219.5Q425.2857142857143 220.0 424.57142857142856 220.0H408.42857142857144Q407.0 220.0 406.42857142857144 218.85714285714286L369.42857142857144 157.71428571428572Q369.14285714285717 157.28571428571428 368.8571428571429 157.35714285714286Q368.57142857142856 157.42857142857144 368.57142857142856 158.0L368.85714285714283 218.28571428571428Q368.85714285714283 219.0 368.35714285714283 219.5Q367.85714285714283 220.0 367.14285714285717 220.0H350.42857142857144Q349.7142857142857 220.0 349.2142857142857 219.5Q348.7142857142857 219.0 348.7142857142857 218.28571428571428V121.71428571428572Q348.7142857142857 121.0 349.2142857142857 120.5Q349.7142857142857 120.0 350.42857142857144 120.0H366.57142857142856Q368.0 120.0 368.57142857142856 121.14285714285715L405.42857142857144 182.0Q405.7142857142857 182.42857142857144 406.0 182.35714285714286Q406.2857142857143 182.28571428571428 406.2857142857143 181.71428571428572L406.1428571428571 121.71428571428572Q406.1428571428571 121.0 406.6428571428571 120.5Q407.1428571428571 120.0 407.85714285714283 120.0Z M458.85714285714283 185.28571428571428V154.71428571428572Q458.85714285714283 144.14285714285717 463.57142857142856 136.0Q468.2857142857143 127.85714285714286 476.7857142857142 123.35714285714286Q485.2857142857142 118.85714285714286 496.4285714285714 118.85714285714286Q507.71428571428567 118.85714285714286 516.2142857142857 123.35714285714286Q524.7142857142857 127.85714285714286 529.4285714285713 136.0Q534.1428571428571 144.14285714285717 534.1428571428571 154.71428571428572V185.28571428571428Q534.1428571428571 196.0 529.4285714285713 204.28571428571428Q524.7142857142857 212.57142857142858 516.2142857142857 217.07142857142858Q507.71428571428567 221.57142857142858 496.4285714285714 221.57142857142858Q485.2857142857142 221.57142857142858 476.7857142857142 217.0Q468.2857142857143 212.42857142857142 463.57142857142856 204.21428571428572Q458.85714285714283 196.0 458.85714285714283 185.28571428571428ZM514.0 186.0V154.57142857142856Q514.0 146.28571428571428 509.21428571428567 141.21428571428572Q504.4285714285714 136.14285714285717 496.4285714285714 136.14285714285717Q488.57142857142856 136.14285714285717 483.7857142857142 141.21428571428572Q478.99999999999994 146.28571428571428 478.99999999999994 154.57142857142856V186.0Q478.99999999999994 194.28571428571428 483.7857142857142 199.28571428571428Q488.57142857142856 204.28571428571428 496.4285714285714 204.28571428571428Q504.2857142857142 204.28571428571428 509.1428571428571 199.28571428571428Q514.0 194.28571428571428 514.0 186.0Z M566.7142857142857 218.28571428571428V121.71428571428572Q566.7142857142857 121.0 567.2142857142857 120.5Q567.7142857142857 120.0 568.4285714285714 120.0H604.1428571428571Q614.8571428571429 120.0 622.9285714285714 123.78571428571429Q631.0 127.57142857142858 635.4285714285714 134.42857142857144Q639.8571428571429 141.28571428571428 639.8571428571429 150.28571428571428V189.71428571428572Q639.8571428571429 198.71428571428572 635.4285714285714 205.57142857142856Q631.0 212.42857142857142 622.9285714285714 216.21428571428572Q614.8571428571429 220.0 604.1428571428571 220.0H568.4285714285714Q567.7142857142857 220.0 567.2142857142857 219.5Q566.7142857142857 219.0 566.7142857142857 218.28571428571428ZM587.5714285714286 202.71428571428572H604.8571428571429Q611.4285714285714 202.71428571428572 615.5 198.28571428571428Q619.5714285714286 193.85714285714286 619.7142857142857 186.42857142857144V153.57142857142856Q619.7142857142857 146.14285714285717 615.6428571428571 141.71428571428572Q611.5714285714286 137.28571428571428 604.7142857142857 137.28571428571428H587.5714285714286Q586.8571428571429 137.28571428571428 586.8571428571429 138.0V202.0Q586.8571428571429 202.71428571428572 587.5714285714286 202.71428571428572Z M739.8571428571429 137.28571428571428H693.0Q692.2857142857143 137.28571428571428 692.2857142857143 138.0V160.14285714285714Q692.2857142857143 160.85714285714286 693.0 160.85714285714286H723.7142857142858Q724.4285714285714 160.85714285714286 724.9285714285714 161.35714285714286Q725.4285714285714 161.85714285714286 725.4285714285714 162.57142857142858V176.42857142857144Q725.4285714285714 177.14285714285714 724.9285714285714 177.64285714285714Q724.4285714285714 178.14285714285714 723.7142857142858 178.14285714285714H693.0Q692.2857142857143 178.14285714285714 692.2857142857143 178.85714285714286V202.0Q692.2857142857143 202.71428571428572 693.0 202.71428571428572H739.8571428571429Q740.5714285714286 202.71428571428572 741.0714285714286 203.21428571428572Q741.5714285714286 203.71428571428572 741.5714285714286 204.42857142857142V218.28571428571428Q741.5714285714286 219.0 741.0714285714286 219.5Q740.5714285714286 220.0 739.8571428571429 220.0H673.8571428571429Q673.1428571428571 220.0 672.6428571428571 219.5Q672.1428571428571 219.0 672.1428571428571 218.28571428571428V121.71428571428572Q672.1428571428571 121.0 672.6428571428571 120.5Q673.1428571428571 120.0 673.8571428571429 120.0H739.8571428571429Q740.5714285714286 120.0 741.0714285714286 120.5Q741.5714285714286 121.0 741.5714285714286 121.71428571428572V135.57142857142856Q741.5714285714286 136.28571428571428 741.0714285714286 136.78571428571428Q740.5714285714286 137.28571428571428 739.8571428571429 137.28571428571428Z"></path></g></svg><span class="vh">NODE </span><span class="sub-name">Research Browser</span></h1>
     <div class="intro">
-      <p class="tele">0.9.9 // Release</p>
-      <p class="hero">Read one page. Find the next ten.</p>
-      <p class="sub">Suggestions come from the page you are reading, and up to 4 tabs play at once.</p>
+      <p class="tele">0.10.0 // Release</p>
+      <p class="hero">Send the whole trail.</p>
+      <p class="sub">NODE maps what you read on a canvas, and you send the whole map to a friend or a group as one file or link.</p>
     </div>
     <div class="actions">
       <a class="btn primary" id="dl-main" href="#downloads">Download</a>
-      <a class="btn secondary" href="https://github.com/westernCasa/node_browser/releases/tag/v0.9.9">Read the notes</a>
+      <a class="btn secondary" href="https://github.com/westernCasa/node_browser/releases/tag/v0.10.0">Read the notes</a>
     </div>
     <div class="dl-meta">
       <p class="tele" id="dl-file">Free · macOS · Windows · Linux</p>
@@ -165,6 +168,7 @@ code{font:400 13px/20px var(--mono)}
     <nav aria-label="Sections">
       <ul class="label">
         <li><a href="#principle">Principle</a></li>
+        <li><a href="#network">How it works</a></li>
         <li><a href="#features">Features</a></li>
         <li><a href="#privacy">Privacy</a></li>
         <li><a href="#available">Available</a></li>
@@ -179,25 +183,51 @@ code{font:400 13px/20px var(--mono)}
   <main>
     <section class="first" aria-label="NODE screen">
       <figure class="shot">
-        <img src="/img/suggestions.webp" width="1600" height="1031" alt="NODE with an article open and the Suggestions panel showing keywords and a result card.">
-        <figcaption class="tele">Suggestions · keywords from the visible page</figcaption>
+        <img src="/img/canvas-shared.webp" width="1440" height="900" alt="NODE showing a trail Sven sent: three groups of cards linked on a canvas, with his note and a Start here question in the sidebar.">
+        <figcaption class="tele">A trail from Sven · read only · Start here</figcaption>
       </figure>
       <div class="stats">
-        <div class="stat"><b>4</b><span class="label">Tabs playing</span></div>
-        <div class="stat"><b>8</b><span class="label">Pages per agent run</span></div>
-        <div class="stat"><b>3</b><span class="label">Desktop platforms</span></div>
+        <div class="stat"><b>0</b><span class="label">Accounts needed</span></div>
+        <div class="stat"><b>4</b><span class="label">Ways to link cards</span></div>
+        <div class="stat"><b>30</b><span class="label">Days a link lasts</span></div>
       </div>
     </section>
 
     <section id="principle" aria-labelledby="h-principle">
       <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Principle</p>
       <h2 class="h1" id="h-principle">Shell for behaviour</h2>
-      <p>NODE treats research as a behaviour and builds the browser around it.</p>
+      <p>NODE treats research as a behaviour you share with the people you research with.</p>
+    </section>
+
+    <section id="network" aria-labelledby="h-network">
+      <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Knowledge networking</p>
+      <h2 class="h1" id="h-network">From your trail to theirs</h2>
+      <p>Research moves between people as a trail, so they see what you read, how it connects and what is still open.</p>
+      <ol class="list steps" aria-label="How sharing a trail works">
+        <li><span class="tele">01</span><span class="label">Read</span><p class="muted">Pages you spend time on become cards on your trail’s canvas.</p></li>
+        <li><span class="tele">02</span><span class="label">Map</span><p class="muted">Group the cards and link them as Supports, Contradicts, Answers or Raises.</p></li>
+        <li><span class="tele">03</span><span class="label">Send</span><p class="muted">Share the trail as a file or an encrypted link, with a note and a question to start from.</p></li>
+        <li><span class="tele">04</span><span class="label">Open</span><p class="muted">They open it in NODE, or read it in any browser without installing anything.</p></li>
+        <li><span class="tele">05</span><span class="label">Continue</span><p class="muted">They replay how you built it, then save it as their own trail and keep going.</p></li>
+      </ol>
+      <figure class="shot">
+        <img src="/img/canvas-replay.webp" width="1440" height="900" loading="lazy" alt="Replay of a shared trail at step 10 of 24, with the current card in violet and the caption: Sven wrote a note.">
+        <figcaption class="tele">Replay · step 10 of 24</figcaption>
+      </figure>
     </section>
 
     <section id="features" aria-labelledby="h-features">
       <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Features</p>
-      <h2 class="h1" id="h-features">What it does</h2>
+      <h2 class="h1" id="h-features">Find the next source</h2>
+
+      <div class="feature">
+        <h3 class="h2">Every trail is a canvas.</h3>
+        <p class="muted">Pages become cards by themselves, next to the page they came from.</p>
+        <figure class="shot">
+          <img src="/img/canvas-copy.webp" width="1440" height="900" loading="lazy" alt="Your own copy of a trail on the canvas, with the tools Select, Hand, Group, Link, Question and Note along the bottom.">
+          <figcaption class="tele">Canvas · Select · Hand · Group · Link · Question · Note</figcaption>
+        </figure>
+      </div>
 
       <div class="feature">
         <h3 class="h2">The next search, already typed.</h3>
@@ -205,35 +235,14 @@ code{font:400 13px/20px var(--mono)}
       </div>
 
       <div class="feature">
-        <h3 class="h2">Four streams. One screen.</h3>
-        <p class="muted">Up to 4 tabs play at once in Mosaic.</p>
-        <figure class="shot">
-          <img src="/img/mosaic.webp" width="1600" height="1031" loading="lazy" alt="NODE in Mosaic with four video tabs in a grid and the Suggestions panel on the right.">
-          <figcaption class="tele">Mosaic · 4 tabs</figcaption>
-        </figure>
-      </div>
-
-      <div class="feature">
-        <h3 class="h2">Every source. In order. Exportable.</h3>
-        <p class="muted">Every page you read in a session is kept with its keywords and saved as Markdown.</p>
-        <figure class="shot">
-          <img src="/img/trail.webp" width="1600" height="1031" loading="lazy" alt="NODE with the Trail panel listing recurring keywords and the pages read in the session.">
-          <figcaption class="tele">Trail · 6 pages read</figcaption>
-        </figure>
-      </div>
-
-      <div class="feature">
-        <h3 class="h2">Share a trail. Merge it back.</h3>
-        <p class="muted">Send a trail as one Markdown file, talk it through in threads, and merge the trails you receive without losing anyone's notes.</p>
-      </div>
-
-      <div class="feature">
-        <h3 class="h2">Ask the page. Local or cloud.</h3>
-        <p class="muted">Ask AI works with a local model or Grok, and page text is sent only when you ask.</p>
+        <h3 class="h2">Ask the trail. Local or cloud.</h3>
+        <p class="muted">Ask AI about a page or a whole trail with a local model or Grok, and page text is sent only when you ask.</p>
       </div>
 
       <ul class="list" aria-label="Also in NODE">
-        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Threads</span><p class="muted">Start a thread for each open question in a trail, reply, and mark it resolved with a conclusion.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Questions</span><p class="muted">Put open questions on the canvas and mark them resolved with a conclusion.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Mosaic</span><p class="muted">Up to 4 tabs on screen at once, with media playing in all of them.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Private tabs</span><p class="muted">A private tab goes in no trail and leaves no history.</p></li>
         <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Research agent</span><p class="muted">Ask a question and get a short report with numbered sources.</p></li>
         <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Talk</span><p class="muted">See the Hacker News and Bluesky posts that link to the page you are reading.</p></li>
         <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Site rules</span><p class="muted">Set autoplay, sound, Mosaic and blocking for each site.</p></li>
@@ -250,38 +259,40 @@ code{font:400 13px/20px var(--mono)}
         <dt class="label">Sent when you ask</dt><dd>Page text goes to Grok only when you ask it something.</dd>
         <dt class="label">Blocked</dt><dd>Ads and trackers are blocked with uBlock Origin's default lists.</dd>
         <dt class="label">Never read</dt><dd>Sign-in, banking and payment pages are never read or sent.</dd>
+        <dt class="label">Share links</dt><dd>A trail is encrypted on your computer before it is uploaded, and the key is only in the link.</dd>
+        <dt class="label">Never shared</dt><dd>Sign-in pages, private parts of addresses, tracking codes and screenshots never go in a shared trail.</dd>
       </dl>
     </section>
 
     <section id="available" aria-labelledby="h-available">
       <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Available today</p>
-      <h2 class="h1" id="h-available">NODE 0.9.9 is live</h2>
-      <p>Download it, use it for real research, and send fixes from your own coding agent.</p>
+      <h2 class="h1" id="h-available">NODE 0.10.0 is live</h2>
+      <p>Download it and send your first trail to someone you research with.</p>
       <ul class="downloads" id="downloads" aria-label="Downloads">
         <li class="dl-row" data-key="mac-arm64">
-          <div class="dl-name"><span class="label">macOS · Apple chip</span><span class="tele">NODE-0.9.9-mac-arm64.dmg · 132 MB</span></div>
+          <div class="dl-name"><span class="label">macOS · Apple chip</span><span class="tele">NODE-0.10.0-mac-arm64.dmg · 132 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-mac-arm64.dmg" aria-label="Download for macOS · Apple chip">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-mac-arm64.dmg" aria-label="Download for macOS · Apple chip">Download</a>
         </li>
         <li class="dl-row" data-key="mac-x64">
-          <div class="dl-name"><span class="label">macOS · Intel</span><span class="tele">NODE-0.9.9-mac-x64.dmg · 139 MB</span></div>
+          <div class="dl-name"><span class="label">macOS · Intel</span><span class="tele">NODE-0.10.0-mac-x64.dmg · 139 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-mac-x64.dmg" aria-label="Download for macOS · Intel">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-mac-x64.dmg" aria-label="Download for macOS · Intel">Download</a>
         </li>
         <li class="dl-row" data-key="win-x64">
-          <div class="dl-name"><span class="label">Windows</span><span class="tele">NODE-0.9.9-win-x64.exe · 122 MB</span></div>
+          <div class="dl-name"><span class="label">Windows</span><span class="tele">NODE-0.10.0-win-x64.exe · 122 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-win-x64.exe" aria-label="Download for Windows">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-win-x64.exe" aria-label="Download for Windows">Download</a>
         </li>
         <li class="dl-row" data-key="linux-appimage">
-          <div class="dl-name"><span class="label">Linux · AppImage</span><span class="tele">NODE-0.9.9-linux-x86_64.AppImage · 128 MB</span></div>
+          <div class="dl-name"><span class="label">Linux · AppImage</span><span class="tele">NODE-0.10.0-linux-x86_64.AppImage · 128 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-linux-x86_64.AppImage" aria-label="Download for Linux · AppImage">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-linux-x86_64.AppImage" aria-label="Download for Linux · AppImage">Download</a>
         </li>
         <li class="dl-row" data-key="linux-deb">
-          <div class="dl-name"><span class="label">Linux · Debian, Ubuntu</span><span class="tele">NODE-0.9.9-linux-amd64.deb · 101 MB</span></div>
+          <div class="dl-name"><span class="label">Linux · Debian, Ubuntu</span><span class="tele">NODE-0.10.0-linux-amd64.deb · 101 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-linux-amd64.deb" aria-label="Download for Linux · Debian, Ubuntu">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-linux-amd64.deb" aria-label="Download for Linux · Debian, Ubuntu">Download</a>
         </li>
       </ul>
       <dl class="rows">
@@ -290,7 +301,7 @@ code{font:400 13px/20px var(--mono)}
         <dt class="label">First open on Linux</dt><dd>Make the AppImage executable with <code>chmod +x</code>, then open it.</dd>
       </dl>
       <dl class="rows">
-        <dt class="label">Version</dt><dd class="mono">0.9.9 · 28 Oct 2026</dd>
+        <dt class="label">Version</dt><dd class="mono">0.10.0 · 5 Nov 2026</dd>
         <dt class="label">Price</dt><dd class="mono">Free</dd>
                 <dt class="label">Updates</dt><dd class="mono">Automatic on Mac and Windows</dd>
         <dt class="label">Source</dt><dd class="mono"><a href="https://github.com/westernCasa/node_browser">westernCasa/node_browser</a></dd>
@@ -305,12 +316,12 @@ code{font:400 13px/20px var(--mono)}
 
 <script>
 (function(){
-  var B="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/";
+  var B="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/";
   var files={
-    "mac-arm64":{name:"Mac",detail:"Apple chip · .dmg",file:"NODE-0.9.9-mac-arm64.dmg",size:"132 MB"},
-    "mac-x64":{name:"Mac",detail:"Intel · .dmg",file:"NODE-0.9.9-mac-x64.dmg",size:"139 MB"},
-    "win-x64":{name:"Windows",detail:"64-bit · .exe",file:"NODE-0.9.9-win-x64.exe",size:"122 MB"},
-    "linux-appimage":{name:"Linux",detail:"x86_64 · .AppImage",file:"NODE-0.9.9-linux-x86_64.AppImage",size:"128 MB"}
+    "mac-arm64":{name:"Mac",detail:"Apple chip · .dmg",file:"NODE-0.10.0-mac-arm64.dmg",size:"132 MB"},
+    "mac-x64":{name:"Mac",detail:"Intel · .dmg",file:"NODE-0.10.0-mac-x64.dmg",size:"139 MB"},
+    "win-x64":{name:"Windows",detail:"64-bit · .exe",file:"NODE-0.10.0-win-x64.exe",size:"122 MB"},
+    "linux-appimage":{name:"Linux",detail:"x86_64 · .AppImage",file:"NODE-0.10.0-linux-x86_64.AppImage",size:"128 MB"}
   };
   var ua=navigator.userAgent||"", uad=navigator.userAgentData;
   var plat=(uad&&uad.platform)||navigator.platform||"";

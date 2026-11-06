@@ -2,11 +2,11 @@
 
 **[noderesearch.app](https://noderesearch.app)** · [Download](https://github.com/westernCasa/node_browser/releases/latest) · Free and open source for macOS, Windows and Linux
 
-![NODE Research Browser showing an article with keyword suggestions in the side panel](docs/media/hero.png)
+![NODE Research Browser showing a trail someone shared: cards grouped and linked on a canvas, with their note and a Start here question in the sidebar](docs/media/canvas.png)
 
-NODE Research Browser (NODE for short) is a desktop browser for niche research. It reads the page you are on, picks out its keywords, and suggests the next pages to read in a side panel. Media plays in up to four tabs at once, side by side, and every page you read is kept in a research trail you can export.
+NODE Research Browser (NODE for short) is a desktop browser for knowledge networking. It maps what you read on a canvas, and you send the whole trail to a friend or a small group as one file or link. They open it in NODE, or read it in any browser, replay how you built it, and keep going from there. NODE also reads the page you are on, picks out its keywords, and suggests the next pages to read.
 
-Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: released, version 0.9.9, updated often.
+Built with Electron and plain JavaScript, with an Expo mobile app (iPhone and Android, in testing) that shares the same core logic. Status: released, version 0.10.0, updated often.
 
 ## What it does
 
