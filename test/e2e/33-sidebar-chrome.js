@@ -72,13 +72,16 @@ const inSidebar = (ui, sel) => ui.evaluate((s) => Boolean(document.querySelector
   for (const u of ["article.html", "other.html?n=1", "other.html?n=2"]) await ui.evaluate((x) => window.scout.createTab(x), `${BASE}/${u}`);
   await sleep(2000);
   let v = await views(app);
-  check("a page fills the window (left of the suggestions widget)", v.length === 1 && v[0].x === 0 && v[0].y === 0 && v[0].height === 900, JSON.stringify(v));
+  // The window's content height: 900 on a Mac and Linux here, less on
+  // Windows, where the menu bar sits inside the window.
+  const ch = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getContentSize()[1]);
+  check("a page fills the window (left of the suggestions widget)", v.length === 1 && v[0].x === 0 && v[0].y === 0 && v[0].height === ch, JSON.stringify({ v, ch }));
   check("the sidebar is out of the way over a page", !(await layer(app)));
   await menuLabel(app, "Show Sidebar");
   await sleep(600);
   const l = await layer(app);
   const shown = await layerShown(app);
-  check("⌘S brings the sidebar over the page in its own layer, 300 px wide", l && l.x === 0 && l.width === 300 && l.height === 900 && shown?.shown, JSON.stringify({ l, shown }));
+  check("⌘S brings the sidebar over the page in its own layer, 300 px wide", l && l.x === 0 && l.width === 300 && l.height === ch && shown?.shown, JSON.stringify({ l, shown }));
   check("the layer is a copy of the sidebar: tabs and address bar", shown?.tabs >= 3 && shown?.address);
   check("the page does not move", JSON.stringify(await views(app)) === JSON.stringify(v));
   // A click in the layer reaches the real sidebar: pick the first tab row.

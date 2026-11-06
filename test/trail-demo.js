@@ -194,7 +194,7 @@ const session = (id, extra) => ({
 {
   const fs = require("fs"), path = require("path");
   const TF = require("../core/trail-file");
-  const text = fs.readFileSync(path.join(__dirname, "..", "docs", "sourdough-starters.trail.md"), "utf8");
+  const text = fs.readFileSync(path.join(__dirname, "..", "docs", "sourdough-starters.trail.md"), "utf8").replace(/\r\n/g, "\n"); // Windows checks it out with CRLF
   const parsed = TF.parseTrailMd(text);
   const store = new TrailStore(memoryStorage(), { now });
   const mine = store.current().trail.id;

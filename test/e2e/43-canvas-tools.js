@@ -28,7 +28,8 @@ const server = http.createServer((req, res) => {
   const pages = ["a", "b", "c"].map((n, i) => ({ url: `${BASE}/${n}`, title: `Page ${n}`, firstAt: t0 + i * 60000, lastAt: t0 + i * 60000 + 30000, visits: 2, keywords: [] }));
   fs.writeFileSync(path.join(userData, "sessions", "s-tools.json"), JSON.stringify({ id: "s-tools", name: "Tools", started: t0, updated: t0, pins: [], trail: pages, opened: [], dismissed: [] }));
   fs.writeFileSync(path.join(userData, "sessions", "current.txt"), "s-tools");
-  const app = await electron.launch({ executablePath: require("electron"), args: ["--no-sandbox", `--user-data-dir=${userData}`, path.join(__dirname, "..", "..")] });
+  // search.brave.com goes nowhere, so the results tab keeps the address it was given (CI has the internet).
+  const app = await electron.launch({ executablePath: require("electron"), args: ["--no-sandbox", "--host-resolver-rules=MAP search.brave.com 127.0.0.1:9", `--user-data-dir=${userData}`, path.join(__dirname, "..", "..")] });
   await app.evaluate(() => {
     const o = globalThis.fetch;
     globalThis.fetch = async (u, opt) => (/wikipedia|duckduckgo|brave\.com/.test(String(u)) ? new Response("{}", { status: 200 }) : o(u, opt));
@@ -121,12 +122,18 @@ const server = http.createServer((req, res) => {
   const a2 = t.cards.find((c) => c.id === A.id);
   check("dragging the group's name moves the group with its cards", t.groups[0].y === g.y + 120 && a2.y === A.y + 120 && a2.pinned, JSON.stringify({ g: t.groups[0].y, a: a2.y }));
 
-  // Move a card: it is pinned.
+  // Move a card: it is pinned. Bring it into view first: on the Windows
+  // runner the canvas is narrower and C starts past its right edge.
+  const keepView = await ui.evaluate(() => ({ ...trailCanvas.v }));
+  await ui.evaluate((c) => trailCanvas.setView({ x: Math.round(trailCanvas.vp.clientWidth / 2 - (c.x + c.w / 2)), y: trailCanvas.v.y, z: 1 }), C);
+  await sleep(300);
   const cc = await centre(C.id);
   await dragTo(cc, { x: cc.x + 60, y: cc.y + 300 });
   t = await snap();
   const c2 = t.cards.find((c) => c.id === C.id);
   check("dragging a card moves it and pins it", c2.y === C.y + 300 && c2.x === C.x + 60 && c2.pinned, JSON.stringify(c2 && [c2.x, c2.y]));
+  await ui.evaluate((v) => trailCanvas.setView(v), keepView);
+  await sleep(300);
 
   // Question and Note.
   // An empty spot on the canvas, with room for a card.
@@ -219,6 +226,13 @@ const server = http.createServer((req, res) => {
   await ui.keyboard.press("Escape");
   await sleep(300);
   check("Esc clears the search and the dimming", await ui.evaluate(() => !document.querySelector("#canvas .cv-card.dim") && document.querySelector("#canvas .cv-drop").hidden));
+  // Every address a page starts loading, from the main process: the results
+  // tab's address is checked there, the same on every system.
+  await app.evaluate(({ app: eapp, webContents }) => {
+    globalThis.__navs = [];
+    for (const wc of webContents.getAllWebContents()) wc.on("did-start-navigation", (d) => globalThis.__navs.push(d.url || ""));
+    eapp.on("web-contents-created", (_e, wc) => wc.on("did-start-navigation", (d) => globalThis.__navs.push(d.url || "")));
+  });
   const before6 = (await snap()).cards.length;
   await ui.click("#canvas .cv-search input");
   await ui.keyboard.type("rye bread history");
@@ -227,7 +241,10 @@ const server = http.createServer((req, res) => {
   t = await snap();
   const sc = t.cards.find((c) => c.kind === "search");
   check("Enter: a search card titled \"Search: rye bread history\"", sc?.title === "Search: rye bread history" && t.cards.length === before6 + 1, JSON.stringify(sc));
-  check("and the results open in a tab", await ui.evaluate(() => tabs.some((x) => /search\.brave\.com\/search\?q=rye%20bread%20history/.test(x.url))) && !(await ui.evaluate(() => canvasShown)));
+  // The tab's address, as asked for: on CI the real page may answer with a
+  // redirect or a check page, so compare the query, not the whole address.
+  const resultTab = (await app.evaluate(() => globalThis.__navs)).find((u) => /search\.brave\.com/.test(u)) || "";
+  check("and the results open in a tab", /rye(%20|\+| )bread(%20|\+| )history/.test(resultTab) && !(await ui.evaluate(() => canvasShown)), resultTab);
   await ui.evaluate(() => window.scout.canvasShow());
   await sleep(1200);
   check("the card says Open results from Brave", (await ui.evaluate((id) => document.querySelector(`#canvas .cv-card[data-id="${id}"] .cv-card-foot`)?.textContent, sc?.id)) === "Open results from Brave");

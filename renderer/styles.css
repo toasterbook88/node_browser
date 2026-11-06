@@ -1602,3 +1602,12 @@ body.sb-replaying .sb-timeline { display: none; }
 .sb-replay-row .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .sb-replay-row .k { flex: none; font: 11px var(--mono); text-transform: uppercase; color: var(--ink-muted); }
 @media (prefers-reduced-motion: reduce) { .sb-replay-bar span { transition: none; } }
+
+/* A narrow canvas (a small window, or the suggestions panel open): the tools
+   in the middle would cover the zoom buttons and the line key, so those two
+   move up above the tools. */
+#canvas { container: cv / inline-size; }
+@container cv (max-width: 1000px) {
+  #canvas .cv-corner, #canvas .cv-key { bottom: 72px; }
+  #canvas .cv-multibar { bottom: 124px; }
+}

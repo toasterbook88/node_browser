@@ -117,7 +117,7 @@ ok("a caption per event type (opened, opened from, timeline only, note, link, gr
 
 {
   // An opened file replays as its sender, from Step 1, in time order.
-  const text = fs.readFileSync(path.join(__dirname, "..", "docs", "sourdough-starters.trail.md"), "utf8");
+  const text = fs.readFileSync(path.join(__dirname, "..", "docs", "sourdough-starters.trail.md"), "utf8").replace(/\r\n/g, "\n"); // Windows checks it out with CRLF
   const st = new TrailStore(memoryStorage(), { now });
   const d = st.importFile(TF.parseTrailMd(text), { file: "/x/s.trail.md" });
   const rs = replaySteps(st.snapshot(d.trail.id), st.events(d.trail.id));

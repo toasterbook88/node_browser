@@ -158,8 +158,14 @@ const shoot = (name) => {
   let st = await pageView();
   check("full screen: the page fills the window, no toolbar and no sidebar on it", st.page.x === 0 && st.page.y === 0 && st.page.height === st.h && !st.layerOnTop, JSON.stringify(st));
   await pointer(3, 400);
-  await sleep(120);
-  const midway = await inLayer("new DOMMatrix(getComputedStyle(document.getElementById('bar')).transform).m41");
+  // Sample the slide while it runs: on a slow machine (the Windows CI
+  // runner) the layer can take longer than 120 ms to start moving.
+  let midway = -300;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 600 && !(midway < 0 && midway > -300)) {
+    midway = (await inLayer("new DOMMatrix(getComputedStyle(document.getElementById('bar')).transform).m41")) ?? -300;
+    await sleep(15);
+  }
   await sleep(400);
   st = await pageView();
   check("pointer at the left edge: the sidebar slides in over the page", st.layerOnTop && st.layer.x === 0 && st.layer.width === 300 && st.layer.height === st.h, JSON.stringify(st));
