@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NODE Research Browser</title>
-<meta name="description" content="NODE Research Browser is a free desktop browser for Mac, Windows and Linux that reads the page you are on and suggests what to read next.">
+<meta name="description" content="NODE Research Browser is a free desktop browser for Mac, Windows and Linux that maps what you read and lets you share it with the people you research with.">
 <link rel="canonical" href="https://noderesearch.app/">
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -15,17 +15,17 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="NODE Research Browser">
 <meta property="og:title" content="NODE Research Browser">
-<meta property="og:description" content="Reads the page you are on and suggests what to read next. Free and open source for Mac, Windows and Linux.">
+<meta property="og:description" content="Map what you read on a canvas and send the whole trail to a friend or a group as one file. Free and open source for Mac, Windows and Linux.">
 <meta property="og:url" content="https://noderesearch.app/">
 <meta property="og:image" content="https://noderesearch.app/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="NODE Research Browser. Read one page. Find the next ten.">
+<meta property="og:image:alt" content="NODE Research Browser. Share what you found and how you got there.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="NODE Research Browser">
-<meta name="twitter:description" content="Reads the page you are on and suggests what to read next. Free and open source.">
+<meta name="twitter:description" content="Map what you read and send the whole trail to the people you research with. Free and open source.">
 <meta name="twitter:image" content="https://noderesearch.app/og.png">
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "NODE Research Browser", "alternateName": "NODE", "url": "https://noderesearch.app/", "description": "NODE Research Browser is a free desktop browser for Mac, Windows and Linux that reads the page you are on and suggests what to read next.", "applicationCategory": "BrowserApplication", "operatingSystem": "macOS, Windows, Linux", "softwareVersion": "0.9.9", "datePublished": "2026-10-28", "license": "https://opensource.org/licenses/MIT", "downloadUrl": "https://github.com/westernCasa/node_browser/releases/latest", "codeRepository": "https://github.com/westernCasa/node_browser", "image": "https://noderesearch.app/og.png", "screenshot": "https://noderesearch.app/img/suggestions.webp", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "author": {"@type": "Person", "name": "Isaac Sven Manzanarez", "url": "https://productdesign.digital/"}}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "NODE Research Browser", "alternateName": "NODE", "url": "https://noderesearch.app/", "description": "NODE Research Browser is a free desktop browser for Mac, Windows and Linux that maps what you read and lets you share it with the people you research with.", "applicationCategory": "BrowserApplication", "operatingSystem": "macOS, Windows, Linux", "softwareVersion": "0.10.0", "datePublished": "2026-11-05", "license": "https://opensource.org/licenses/MIT", "downloadUrl": "https://github.com/westernCasa/node_browser/releases/latest", "codeRepository": "https://github.com/westernCasa/node_browser", "image": "https://noderesearch.app/og.png", "screenshot": "https://noderesearch.app/img/canvas-shared.webp", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "author": {"@type": "Person", "name": "Isaac Sven Manzanarez", "url": "https://productdesign.digital/"}}</script>
 <style>
 @font-face{font-family:"Barlow";font-weight:400;font-style:normal;font-display:swap;src:url(/fonts/barlow-latin-400-normal.woff2) format("woff2")}
 @font-face{font-family:"Barlow";font-weight:600;font-style:normal;font-display:swap;src:url(/fonts/barlow-latin-600-normal.woff2) format("woff2")}
@@ -67,13 +67,13 @@ p{margin:0;max-width:60ch}
 @media (min-width:900px){.page{padding-left:max(64px,env(safe-area-inset-left,0px));padding-right:max(64px,env(safe-area-inset-right,0px))}}
 
 /* Left column */
-.side{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;height:100vh;display:flex;flex-direction:column;gap:var(--space-5);
-  padding-block:var(--space-6);padding-right:var(--space-6);border-right:1px solid var(--line);overflow-y:auto}
+.side{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;height:100vh;height:100dvh;display:flex;flex-direction:column;gap:clamp(12px,2.4vh,32px);
+  padding-block:clamp(24px,4.4vh,56px);padding-right:var(--space-6);border-right:1px solid var(--line);overflow-y:auto}
 .lockup{display:block;width:160px;height:auto;color:var(--ink)}
 .brand-h1{margin:0;display:flex;flex-direction:column;gap:var(--space-2)}
 .brand-h1 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .brand-h1 .sub-name{font:600 13px/16px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-muted)}
-.intro{display:flex;flex-direction:column;gap:var(--space-3)}
+.intro{display:flex;flex-direction:column;gap:clamp(8px,1.6vh,16px)}
 .sub{font-size:18px;line-height:26px;max-width:34ch}
 .actions{display:flex;flex-wrap:wrap;gap:var(--space-2)}
 .btn{display:inline-flex;align-items:center;height:44px;padding:0 var(--space-4);border-radius:var(--radius-sm);border:1px solid var(--ink);
@@ -85,7 +85,7 @@ p{margin:0;max-width:60ch}
 nav ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4)}
 nav a{text-decoration:none;color:var(--ink-muted);transition:color var(--motion-fast) var(--ease-move)}
 nav a:hover{color:var(--ink)}
-.side footer{margin-top:auto;display:flex;flex-direction:column;gap:var(--space-1)}
+.side footer{margin-top:auto;display:flex;flex-wrap:wrap;gap:var(--space-1) var(--space-2)}
 .side footer a{color:var(--ink-muted)}
 
 /* Right column */
@@ -105,12 +105,18 @@ section{padding-block:var(--space-6);border-top:1px solid var(--line);display:fl
 
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .list li{display:grid;grid-template-columns:16px minmax(0,180px) minmax(0,1fr);gap:var(--space-3);align-items:baseline;padding-block:var(--space-3);border-top:1px solid var(--line)}
+.steps li .tele{transform:none;color:var(--ink-muted)}
+.steps li{grid-template-columns:24px minmax(0,180px) minmax(0,1fr)}
+@media (max-width:560px){.steps li{grid-template-columns:24px minmax(0,1fr)}}
 .list li .mark{width:12px;height:12px;transform:translateY(1px)}
 
 .rows{display:grid;grid-template-columns:max-content minmax(0,1fr);margin:0}
 .rows dt,.rows dd{padding-block:var(--space-3);border-top:1px solid var(--line);margin:0}
 .rows dt{color:var(--ink-muted);padding-right:var(--space-5)}
-.dl-meta{display:flex;flex-direction:column;gap:var(--space-1);margin-top:calc(-1 * var(--space-4))}
+.audience{color:var(--ink)}
+.proof{margin:0}
+.faq dt{max-width:24ch}
+.dl-meta{display:flex;flex-direction:column;gap:var(--space-1);margin-top:calc(-0.5 * clamp(12px,2.4vh,32px))}
 .dl-meta a{color:var(--ink-muted)}
 .downloads{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .dl-row{display:flex;align-items:center;gap:var(--space-3);padding-block:var(--space-3);border-top:1px solid var(--line)}
@@ -122,6 +128,22 @@ section{padding-block:var(--space-6);border-top:1px solid var(--line);display:fl
 code{font:400 13px/20px var(--mono)}
 .rows dd.mono{font:400 13px/24px var(--mono);font-variant-numeric:tabular-nums}
 
+@media (min-width:900px){
+  .side .hero{font-size:clamp(32px,min(4.4vw,6.6vh),64px)}
+  .side .sub{font-size:clamp(15px,2.2vh,18px);line-height:1.45}
+  .side .lockup{width:clamp(120px,17vh,160px)}
+}
+@media (min-width:900px) and (max-width:1199px){
+  .page{padding-left:max(40px,env(safe-area-inset-left,0px));padding-right:max(40px,env(safe-area-inset-right,0px))}
+  .side{padding-right:var(--space-5)}
+  main{padding-left:var(--space-5)}
+  .side .btn{padding:0 var(--space-3)}
+  .side .hero{font-size:clamp(30px,min(3.9vw,6.2vh),56px)}
+}
+@media (min-width:900px) and (max-height:760px){
+  .side .btn{height:40px}
+  .side .eyebrow.audience{display:none}
+}
 @media (max-width:899px){
   .page{grid-template-columns:minmax(0,1fr)}
   .side{position:static;height:auto;overflow:visible;padding-right:0;border-right:0;padding-block:var(--space-5)}
@@ -139,65 +161,187 @@ code{font:400 13px/20px var(--mono)}
   .h1{font-size:32px;line-height:36px}
 }
 @media (prefers-reduced-motion:reduce){.btn,nav a{transition-duration:var(--motion-fast)}}
+/* Dot field behind the left column */
+#dots{position:fixed;left:0;top:0;z-index:0;pointer-events:none}
+.page{position:relative;z-index:1}
+@media (max-width:899px){#dots{position:absolute}}
+/* Modes: Research (default) and Fun. Fun makes purple the main colour. */
+.mode-row{display:flex;align-items:center;justify-content:flex-start;gap:var(--space-3);flex-wrap:wrap}
+.mode{display:inline-flex;align-self:flex-start;border:1px solid var(--line);border-radius:var(--radius-sm);padding:2px;gap:2px}
+.mode button{appearance:none;background:transparent;border:0;border-radius:var(--radius-sm);height:28px;padding:0 var(--space-3);cursor:pointer;
+  font:600 11px/16px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-muted);transition:background-color var(--motion-fast) var(--ease-move),color var(--motion-fast) var(--ease-move)}
+.mode button:hover{color:var(--ink)}
+.mode button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.mode button:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+[data-for="fun"]{display:none !important}
+html[data-mode="fun"] [data-for="research"]{display:none !important}
+html[data-mode="fun"] [data-for="fun"]{display:revert !important}
+html[data-mode="fun"] .intro[data-for="fun"],html[data-mode="fun"] section[data-for="fun"],html[data-mode="fun"] .actions[data-for="fun"]{display:flex !important}
+html[data-mode="fun"] ul.label[data-for="fun"]{display:flex !important}
+html[data-mode="fun"] .btn[data-for="fun"]{display:inline-flex !important}
+html[data-mode="fun"]{--main:#9a6bff;--signal:#9a6bff}
+html[data-mode="fun"] .btn.primary{background:var(--main);border-color:var(--main);color:#000}
+html[data-mode="fun"] .btn.secondary{border-color:var(--main)}
+html[data-mode="fun"] .btn.secondary:hover{background:var(--main);color:#000}
+html[data-mode="fun"] .mode button[aria-pressed="true"]{background:var(--main);color:#000}
+html[data-mode="fun"] .eyebrow .mark,html[data-mode="fun"] .list .mark{color:var(--main)}
+html[data-mode="fun"] .hero em{font-style:normal;color:var(--main)}
+html[data-mode="fun"] .stat b{color:var(--main)}
+
+/* Fun mode visuals, drawn in HTML */
+.mosaic{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;background:var(--surface-raised);border:1px solid var(--line);padding:6px;border-radius:var(--radius-md)}
+.tile{position:relative;aspect-ratio:16/10;overflow:hidden;border-radius:var(--radius-sm);background:#0b0a10;border:1px solid var(--line)}
+.tile.on{border-color:var(--main,#9a6bff)}
+.tile .pic{position:absolute;inset:0;background:radial-gradient(120% 90% at var(--x,30%) var(--y,40%),var(--c1) 0%,transparent 60%),radial-gradient(90% 80% at 80% 90%,var(--c2) 0%,transparent 55%),#07060b;
+  animation:drift 9s ease-in-out infinite alternate;animation-delay:var(--d,0s)}
+.tile:nth-child(1){--c1:#4b2a9a;--c2:#1b1240}
+.tile:nth-child(2){--c1:#2a1f5c;--c2:#5b2f8f;--d:-3s}
+.tile:nth-child(3){--c1:#3a2370;--c2:#18113a;--d:-6s}
+.tile:nth-child(4){--c1:#5a2f9c;--c2:#22164a;--d:-1.5s}
+@keyframes drift{0%{--x:20%;--y:30%;transform:scale(1)}100%{--x:70%;--y:60%;transform:scale(1.12) translate(-3%,2%)}}
+.tile .top,.tile .bot{position:absolute;left:8px;right:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;font:400 11px/14px var(--mono);color:#d8d3e6;text-transform:none}
+.tile .top{top:7px}.tile .bot{bottom:8px}
+.tile .bar{position:absolute;left:8px;right:8px;bottom:26px;height:2px;background:rgba(255,255,255,.16)}
+.tile .bar i{position:absolute;left:0;top:0;bottom:0;background:#fff;width:0;animation:play var(--len,14s) linear infinite;animation-delay:var(--d,0s)}
+.tile.on .bar i{background:var(--main,#9a6bff)}
+@keyframes play{to{width:100%}}
+.eq{display:inline-flex;gap:2px;align-items:flex-end;height:10px}
+.eq span{width:2px;background:currentColor;animation:eq 0.9s ease-in-out infinite alternate}
+.eq span:nth-child(2){animation-delay:-.3s}.eq span:nth-child(3){animation-delay:-.6s}
+@keyframes eq{0%{height:2px}100%{height:10px}}
+.loopbox{border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-raised);padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3)}
+.track{position:relative;height:6px;background:#26232f;border-radius:3px}
+.track .sec{position:absolute;left:28%;width:34%;top:-6px;bottom:-6px;border:1px solid var(--main,#9a6bff);border-radius:var(--radius-sm);background:rgba(154,107,255,.14)}
+.track .head{position:absolute;top:-5px;width:2px;height:16px;background:#fff;left:28%;animation:loophead 4.2s linear infinite}
+@keyframes loophead{from{left:28%}to{left:62%}}
+.loopmeta{display:flex;justify-content:space-between;font:400 13px/20px var(--mono);color:var(--ink-muted)}
+.loopmeta b{font-weight:400;color:var(--main,#9a6bff)}
+.menu{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;font:400 13px/20px var(--mono)}
+.menu li{padding:var(--space-2) var(--space-3);border-top:1px solid var(--line);color:var(--ink-muted)}
+.menu li:first-child{border-top:0}
+.menu li.on{color:#000;background:var(--main,#9a6bff)}
+.vcards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}
+.vcard{border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-raised);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-1);min-width:0}
+.vcard .k{font:600 11px/16px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--main,#9a6bff)}
+.vcard .t{font:600 15px/20px var(--sans);overflow-wrap:anywhere}
+.vcard .m{font:400 12px/18px var(--mono);color:var(--ink-muted)}
+.tile .bot span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tile .bot span:last-child{flex:none}
+@media (max-width:560px){.vcards{grid-template-columns:minmax(0,1fr)}.mosaic{gap:4px;padding:4px}.tile .top span+span{display:none}.tile:not(.on) .bot span:last-child{display:none}.tile .top,.tile .bot{font-size:10px}}
+@media (prefers-reduced-motion:reduce){.tile .pic,.tile .bar i,.eq span,.track .head{animation:none}.tile .bar i{width:40%}}
 </style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Do Chrome extensions work?", "acceptedAnswer": {"@type": "Answer", "text": "No. NODE is built on Electron, which can't run them. Ads and trackers are blocked with uBlock Origin's default lists, built in."}}, {"@type": "Question", "name": "What does NODE send, and to whom?", "acceptedAnswer": {"@type": "Answer", "text": "Nothing goes to the maker of NODE: there is no account and no usage data. Searches go to the search sources you turn on, and page text goes to Grok only when you ask it something."}}, {"@type": "Question", "name": "Does the other person need NODE?", "acceptedAnswer": {"@type": "Answer", "text": "To open the trail as a canvas and replay it, yes. The file itself is plain Markdown, so anyone can read it in a text editor."}}, {"@type": "Question", "name": "Can I sign in to Google?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Google pages open in a separate window of a Chromium-based browser on your computer, because Google blocks sign-in inside Electron."}}, {"@type": "Question", "name": "Why does Windows show a warning?", "acceptedAnswer": {"@type": "Answer", "text": "The Windows build is not signed yet. Click More info, then Run anyway. The Mac app is signed by Apple."}}, {"@type": "Question", "name": "What happens to my trails if NODE stops?", "acceptedAnswer": {"@type": "Answer", "text": "They stay on your computer as plain Markdown files, and the code is MIT licensed, so your work stays readable without NODE."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. No account, no paid plan."}}]}</script>
+<script>(function(){try{var q=new URLSearchParams(location.search).get("mode");if(location.pathname.replace(/\/$/,"")==="/fun"||q==="fun"||location.hash==="#fun")document.documentElement.setAttribute("data-mode","fun")}catch(e){}})();</script>
+<script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="m" viewBox="0 0 24 24"><path transform="matrix(1.20193,0,0,1.20193,-1.2237,-2.42319)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"/></symbol>
 </svg>
 
+<canvas id="dots" aria-hidden="true"></canvas>
 <div class="page">
   <aside class="side">
     <h1 class="brand-h1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 647 140" class="lockup" aria-hidden="true"><g fill="currentColor"><g transform="translate(100,100) scale(5.83333)"><path transform="matrix(1.20193,0,0,1.20193,-1.2237,-2.42319)" d="M10.004,12.998L1.067,12.998C1.035,12.67 1.018,12.337 1.018,12C1.018,11.663 1.035,11.33 1.067,11.002L8.593,11.002L3.273,5.682C3.696,5.166 4.169,4.693 4.684,4.271L10.004,9.591L10.004,2.065C10.332,2.033 10.665,2.016 11.002,2.016C11.339,2.016 11.672,2.033 12,2.065L12,11.002L20.937,11.002C20.969,11.33 20.986,11.663 20.986,12C20.986,12.337 20.969,12.67 20.937,12.998L13.411,12.998L18.731,18.318C18.309,18.834 17.836,19.307 17.32,19.729L12,14.409L12,21.935C11.672,21.967 11.339,21.984 11.002,21.984C10.665,21.984 10.332,21.967 10.004,21.935L10.004,12.998Z"></path></g><path d="M407.85714285714283 120.0H424.57142857142856Q425.2857142857143 120.0 425.7857142857143 120.5Q426.2857142857143 121.0 426.2857142857143 121.71428571428572V218.28571428571428Q426.2857142857143 219.0 425.7857142857143 219.5Q425.2857142857143 220.0 424.57142857142856 220.0H408.42857142857144Q407.0 220.0 406.42857142857144 218.85714285714286L369.42857142857144 157.71428571428572Q369.14285714285717 157.28571428571428 368.8571428571429 157.35714285714286Q368.57142857142856 157.42857142857144 368.57142857142856 158.0L368.85714285714283 218.28571428571428Q368.85714285714283 219.0 368.35714285714283 219.5Q367.85714285714283 220.0 367.14285714285717 220.0H350.42857142857144Q349.7142857142857 220.0 349.2142857142857 219.5Q348.7142857142857 219.0 348.7142857142857 218.28571428571428V121.71428571428572Q348.7142857142857 121.0 349.2142857142857 120.5Q349.7142857142857 120.0 350.42857142857144 120.0H366.57142857142856Q368.0 120.0 368.57142857142856 121.14285714285715L405.42857142857144 182.0Q405.7142857142857 182.42857142857144 406.0 182.35714285714286Q406.2857142857143 182.28571428571428 406.2857142857143 181.71428571428572L406.1428571428571 121.71428571428572Q406.1428571428571 121.0 406.6428571428571 120.5Q407.1428571428571 120.0 407.85714285714283 120.0Z M458.85714285714283 185.28571428571428V154.71428571428572Q458.85714285714283 144.14285714285717 463.57142857142856 136.0Q468.2857142857143 127.85714285714286 476.7857142857142 123.35714285714286Q485.2857142857142 118.85714285714286 496.4285714285714 118.85714285714286Q507.71428571428567 118.85714285714286 516.2142857142857 123.35714285714286Q524.7142857142857 127.85714285714286 529.4285714285713 136.0Q534.1428571428571 144.14285714285717 534.1428571428571 154.71428571428572V185.28571428571428Q534.1428571428571 196.0 529.4285714285713 204.28571428571428Q524.7142857142857 212.57142857142858 516.2142857142857 217.07142857142858Q507.71428571428567 221.57142857142858 496.4285714285714 221.57142857142858Q485.2857142857142 221.57142857142858 476.7857142857142 217.0Q468.2857142857143 212.42857142857142 463.57142857142856 204.21428571428572Q458.85714285714283 196.0 458.85714285714283 185.28571428571428ZM514.0 186.0V154.57142857142856Q514.0 146.28571428571428 509.21428571428567 141.21428571428572Q504.4285714285714 136.14285714285717 496.4285714285714 136.14285714285717Q488.57142857142856 136.14285714285717 483.7857142857142 141.21428571428572Q478.99999999999994 146.28571428571428 478.99999999999994 154.57142857142856V186.0Q478.99999999999994 194.28571428571428 483.7857142857142 199.28571428571428Q488.57142857142856 204.28571428571428 496.4285714285714 204.28571428571428Q504.2857142857142 204.28571428571428 509.1428571428571 199.28571428571428Q514.0 194.28571428571428 514.0 186.0Z M566.7142857142857 218.28571428571428V121.71428571428572Q566.7142857142857 121.0 567.2142857142857 120.5Q567.7142857142857 120.0 568.4285714285714 120.0H604.1428571428571Q614.8571428571429 120.0 622.9285714285714 123.78571428571429Q631.0 127.57142857142858 635.4285714285714 134.42857142857144Q639.8571428571429 141.28571428571428 639.8571428571429 150.28571428571428V189.71428571428572Q639.8571428571429 198.71428571428572 635.4285714285714 205.57142857142856Q631.0 212.42857142857142 622.9285714285714 216.21428571428572Q614.8571428571429 220.0 604.1428571428571 220.0H568.4285714285714Q567.7142857142857 220.0 567.2142857142857 219.5Q566.7142857142857 219.0 566.7142857142857 218.28571428571428ZM587.5714285714286 202.71428571428572H604.8571428571429Q611.4285714285714 202.71428571428572 615.5 198.28571428571428Q619.5714285714286 193.85714285714286 619.7142857142857 186.42857142857144V153.57142857142856Q619.7142857142857 146.14285714285717 615.6428571428571 141.71428571428572Q611.5714285714286 137.28571428571428 604.7142857142857 137.28571428571428H587.5714285714286Q586.8571428571429 137.28571428571428 586.8571428571429 138.0V202.0Q586.8571428571429 202.71428571428572 587.5714285714286 202.71428571428572Z M739.8571428571429 137.28571428571428H693.0Q692.2857142857143 137.28571428571428 692.2857142857143 138.0V160.14285714285714Q692.2857142857143 160.85714285714286 693.0 160.85714285714286H723.7142857142858Q724.4285714285714 160.85714285714286 724.9285714285714 161.35714285714286Q725.4285714285714 161.85714285714286 725.4285714285714 162.57142857142858V176.42857142857144Q725.4285714285714 177.14285714285714 724.9285714285714 177.64285714285714Q724.4285714285714 178.14285714285714 723.7142857142858 178.14285714285714H693.0Q692.2857142857143 178.14285714285714 692.2857142857143 178.85714285714286V202.0Q692.2857142857143 202.71428571428572 693.0 202.71428571428572H739.8571428571429Q740.5714285714286 202.71428571428572 741.0714285714286 203.21428571428572Q741.5714285714286 203.71428571428572 741.5714285714286 204.42857142857142V218.28571428571428Q741.5714285714286 219.0 741.0714285714286 219.5Q740.5714285714286 220.0 739.8571428571429 220.0H673.8571428571429Q673.1428571428571 220.0 672.6428571428571 219.5Q672.1428571428571 219.0 672.1428571428571 218.28571428571428V121.71428571428572Q672.1428571428571 121.0 672.6428571428571 120.5Q673.1428571428571 120.0 673.8571428571429 120.0H739.8571428571429Q740.5714285714286 120.0 741.0714285714286 120.5Q741.5714285714286 121.0 741.5714285714286 121.71428571428572V135.57142857142856Q741.5714285714286 136.28571428571428 741.0714285714286 136.78571428571428Q740.5714285714286 137.28571428571428 739.8571428571429 137.28571428571428Z"></path></g></svg><span class="vh">NODE </span><span class="sub-name">Research Browser</span></h1>
-    <div class="intro">
-      <p class="tele">0.9.9 // Release</p>
-      <p class="hero">Read one page. Find the next ten.</p>
-      <p class="sub">Suggestions come from the page you are reading, and up to 4 tabs play at once.</p>
+    <div class="mode-row">
+    <p class="tele">0.10.0 // <span data-for="research">Release</span><span data-for="fun">Fun mode</span></p>
+    </div>
+    <div class="intro" data-for="research">
+      <p class="eyebrow audience">For people who research together</p>
+      <p class="hero">Share what you found and how you got there.</p>
+      <p class="sub">NODE maps what you read on a canvas, and you send the whole map to a friend or a group as one file.</p>
+    </div>
+    <div class="intro" data-for="fun">
+      <p class="eyebrow audience">For watching and listening with friends</p>
+      <p class="hero">Play four at once. <em>Loop the best part.</em></p>
+      <p class="sub">NODE plays up to four tabs together, loops the part you want again, and keeps your favourites on a trail you can send to friends.</p>
     </div>
     <div class="actions">
       <a class="btn primary" id="dl-main" href="#downloads">Download</a>
-      <a class="btn secondary" href="https://github.com/westernCasa/node_browser/releases/tag/v0.9.9">Read the notes</a>
+      <a class="btn secondary" href="/sample" data-track="hero-sample" data-for="research">Open a sample trail</a>
+      <a class="btn secondary" href="#fun-mosaic" data-track="hero-mosaic" data-for="fun">See Mosaic</a>
     </div>
     <div class="dl-meta">
       <p class="tele" id="dl-file">Free · macOS · Windows · Linux</p>
-      <p class="tele"><a href="#downloads" id="dl-other">All downloads</a></p>
+      <p class="tele"><a href="#downloads" id="dl-other">All downloads</a> · <a href="https://github.com/westernCasa/node_browser/releases/tag/v0.10.0">Release notes</a></p>
     </div>
     <nav aria-label="Sections">
-      <ul class="label">
+      <ul class="label" data-for="fun">
+        <li><a href="#fun-mosaic">Mosaic</a></li>
+        <li><a href="#fun-autoplay">Autoplay</a></li>
+        <li><a href="#fun-loop">Loop</a></li>
+        <li><a href="#fun-keep">Keep</a></li>
+        <li><a href="#fun-share">Share</a></li>
+        <li><a href="#faq">Questions</a></li>
+        <li><a href="#available">Available</a></li>
+      </ul>
+      <ul class="label" data-for="research">
         <li><a href="#principle">Principle</a></li>
+        <li><a href="#network">How it works</a></li>
         <li><a href="#features">Features</a></li>
+        <li><a href="/sample">Sample trail</a></li>
         <li><a href="#privacy">Privacy</a></li>
+        <li><a href="#faq">Questions</a></li>
         <li><a href="#available">Available</a></li>
       </ul>
     </nav>
     <footer class="tele">
-      <span>Open source</span>
+      <span>Open source ·</span>
       <span>Built by <a href="https://productdesign.digital/">Isaac Sven Manzanarez</a></span>
     </footer>
   </aside>
 
   <main>
-    <section class="first" aria-label="NODE screen">
+    <section data-for="research" class="first" aria-label="NODE screen">
       <figure class="shot">
-        <img src="/img/suggestions.webp" width="1600" height="1031" alt="NODE with an article open and the Suggestions panel showing keywords and a result card.">
-        <figcaption class="tele">Suggestions · keywords from the visible page</figcaption>
+        <img src="/img/canvas-shared.webp" width="1440" height="900" alt="NODE showing a trail Sven sent: three groups of cards linked on a canvas, with his note and a Start here question in the sidebar.">
+        <figcaption class="tele">A trail from Sven · read only · Start here</figcaption>
       </figure>
       <div class="stats">
-        <div class="stat"><b>4</b><span class="label">Tabs playing</span></div>
-        <div class="stat"><b>8</b><span class="label">Pages per agent run</span></div>
-        <div class="stat"><b>3</b><span class="label">Desktop platforms</span></div>
+        <div class="stat"><b>0</b><span class="label">Accounts needed</span></div>
+        <div class="stat"><b>4</b><span class="label">Ways to link cards</span></div>
+        <div class="stat"><b>1</b><span class="label">File per trail</span></div>
       </div>
+      <p class="tele proof">Open source · MIT licence · Mac app signed by Apple · No account</p>
     </section>
 
-    <section id="principle" aria-labelledby="h-principle">
+    <section data-for="research" id="principle" aria-labelledby="h-principle">
       <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Principle</p>
       <h2 class="h1" id="h-principle">Shell for behaviour</h2>
-      <p>NODE treats research as a behaviour and builds the browser around it.</p>
+      <p>NODE treats research as a behaviour you share with the people you research with.</p>
     </section>
 
-    <section id="features" aria-labelledby="h-features">
+    <section data-for="research" id="network" aria-labelledby="h-network">
+      <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Knowledge networking</p>
+      <h2 class="h1" id="h-network">From your trail to theirs</h2>
+      <p>Research moves between people as a trail, so they see what you read, how it connects and what is still open.</p>
+      <ol class="list steps" aria-label="How sharing a trail works">
+        <li><span class="tele">01</span><span class="label">Read</span><p class="muted">Pages you spend time on become cards on your trail’s canvas.</p></li>
+        <li><span class="tele">02</span><span class="label">Map</span><p class="muted">Group the cards and link them as Supports, Contradicts, Answers or Raises.</p></li>
+        <li><span class="tele">03</span><span class="label">Send</span><p class="muted">Share the trail as one file, with a note and a question to start from.</p></li>
+        <li><span class="tele">04</span><span class="label">Open</span><p class="muted">They open it in NODE, read only, with your note and the question beside the canvas.</p></li>
+        <li><span class="tele">05</span><span class="label">Continue</span><p class="muted">They replay how you built it, then save it as their own trail and keep going.</p></li>
+      </ol>
+      <figure class="shot">
+        <img src="/img/canvas-replay.webp" width="1440" height="900" loading="lazy" alt="Replay of a shared trail at step 10 of 24, with the current card in violet and the caption: Sven wrote a note.">
+        <figcaption class="tele">Replay · step 10 of 24</figcaption>
+      </figure>
+      <div class="actions"><a class="btn secondary" href="/sample" data-track="network-sample">Open a sample trail</a></div>
+    </section>
+
+    <section data-for="research" id="features" aria-labelledby="h-features">
       <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Features</p>
-      <h2 class="h1" id="h-features">What it does</h2>
+      <h2 class="h1" id="h-features">Find the next source</h2>
+
+      <div class="feature">
+        <h3 class="h2">Every trail is a canvas.</h3>
+        <p class="muted">Pages become cards by themselves, next to the page they came from.</p>
+        <figure class="shot">
+          <img src="/img/canvas-copy.webp" width="1440" height="900" loading="lazy" alt="Your own copy of a trail on the canvas, with the tools Select, Hand, Group, Link, Question and Note along the bottom.">
+          <figcaption class="tele">Canvas · Select · Hand · Group · Link · Question · Note</figcaption>
+        </figure>
+      </div>
 
       <div class="feature">
         <h3 class="h2">The next search, already typed.</h3>
@@ -205,35 +349,14 @@ code{font:400 13px/20px var(--mono)}
       </div>
 
       <div class="feature">
-        <h3 class="h2">Four streams. One screen.</h3>
-        <p class="muted">Up to 4 tabs play at once in Mosaic.</p>
-        <figure class="shot">
-          <img src="/img/mosaic.webp" width="1600" height="1031" loading="lazy" alt="NODE in Mosaic with four video tabs in a grid and the Suggestions panel on the right.">
-          <figcaption class="tele">Mosaic · 4 tabs</figcaption>
-        </figure>
-      </div>
-
-      <div class="feature">
-        <h3 class="h2">Every source. In order. Exportable.</h3>
-        <p class="muted">Every page you read in a session is kept with its keywords and saved as Markdown.</p>
-        <figure class="shot">
-          <img src="/img/trail.webp" width="1600" height="1031" loading="lazy" alt="NODE with the Trail panel listing recurring keywords and the pages read in the session.">
-          <figcaption class="tele">Trail · 6 pages read</figcaption>
-        </figure>
-      </div>
-
-      <div class="feature">
-        <h3 class="h2">Share a trail. Merge it back.</h3>
-        <p class="muted">Send a trail as one Markdown file, talk it through in threads, and merge the trails you receive without losing anyone's notes.</p>
-      </div>
-
-      <div class="feature">
-        <h3 class="h2">Ask the page. Local or cloud.</h3>
-        <p class="muted">Ask AI works with a local model or Grok, and page text is sent only when you ask.</p>
+        <h3 class="h2">Ask the trail. Local or cloud.</h3>
+        <p class="muted">Ask AI about a page or a whole trail with a local model or Grok, and page text is sent only when you ask.</p>
       </div>
 
       <ul class="list" aria-label="Also in NODE">
-        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Threads</span><p class="muted">Start a thread for each open question in a trail, reply, and mark it resolved with a conclusion.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Questions</span><p class="muted">Put open questions on the canvas and mark them resolved with a conclusion.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Mosaic</span><p class="muted">Up to 4 tabs on screen at once, with media playing in all of them.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Private tabs</span><p class="muted">A private tab goes in no trail and leaves no history.</p></li>
         <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Research agent</span><p class="muted">Ask a question and get a short report with numbered sources.</p></li>
         <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Talk</span><p class="muted">See the Hacker News and Bluesky posts that link to the page you are reading.</p></li>
         <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Site rules</span><p class="muted">Set autoplay, sound, Mosaic and blocking for each site.</p></li>
@@ -242,7 +365,7 @@ code{font:400 13px/20px var(--mono)}
       </ul>
     </section>
 
-    <section id="privacy" aria-labelledby="h-privacy">
+    <section data-for="research" id="privacy" aria-labelledby="h-privacy">
       <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Privacy</p>
       <h2 class="h1" id="h-privacy">What NODE sends</h2>
       <dl class="rows">
@@ -250,38 +373,141 @@ code{font:400 13px/20px var(--mono)}
         <dt class="label">Sent when you ask</dt><dd>Page text goes to Grok only when you ask it something.</dd>
         <dt class="label">Blocked</dt><dd>Ads and trackers are blocked with uBlock Origin's default lists.</dd>
         <dt class="label">Never read</dt><dd>Sign-in, banking and payment pages are never read or sent.</dd>
+        <dt class="label">Never shared</dt><dd>Sign-in pages, private parts of addresses, tracking codes and screenshots never go in a shared trail.</dd>
+      </dl>
+    </section>
+
+    <section class="first" data-for="fun" aria-label="Mosaic in fun mode">
+      <figure class="shot">
+        <div class="mosaic" role="img" aria-label="Mosaic: four tabs playing at once, one of them looping a section from 0:12 to 0:40.">
+          <div class="tile on" style="--len:16s"><div class="pic"></div><div class="top"><span>youtube.com</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div><div class="bar"><i></i></div><div class="bot"><span>Live set · 1:02:14</span><span>↻ 0:12–0:40</span></div></div>
+          <div class="tile" style="--len:22s"><div class="pic"></div><div class="top"><span>vimeo.com</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div><div class="bar"><i></i></div><div class="bot"><span>Short film</span><span>Playing</span></div></div>
+          <div class="tile" style="--len:12s"><div class="pic"></div><div class="top"><span>bandcamp.com</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div><div class="bar"><i></i></div><div class="bot"><span>Album · track 3</span><span>Playing</span></div></div>
+          <div class="tile" style="--len:18s"><div class="pic"></div><div class="top"><span>dailymotion.com</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div><div class="bar"><i></i></div><div class="bot"><span>Match highlights</span><span>Playing</span></div></div>
+        </div>
+        <figcaption class="tele">Mosaic · 4 playing · Sound: all</figcaption>
+      </figure>
+      <div class="stats">
+        <div class="stat"><b>4</b><span class="label">Tabs playing at once</span></div>
+        <div class="stat"><b>0</b><span class="label">Clicks to start a video</span></div>
+        <div class="stat"><b>1</b><span class="label">File to send your favourites</span></div>
+      </div>
+      <p class="tele proof">Free · Open source · No account · Ads blocked</p>
+    </section>
+
+    <section id="fun-mosaic" data-for="fun" aria-labelledby="h-fun-mosaic">
+      <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Mosaic</p>
+      <h2 class="h1" id="h-fun-mosaic">Four tabs, all playing</h2>
+      <p>Tile your tabs in a grid and up to four play together, with sound from all of them if you want it.</p>
+      <ul class="list" aria-label="Mosaic">
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Sound: all</span><p class="muted">Hear every tile at once, or only the one you clicked.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Centre on click</span><p class="muted">Click a video and it scrolls to the middle of its tile.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">A fifth tab</span><p class="muted">The tab that started playing first pauses and is marked ⏸ in the tab bar.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Picture in picture</span><p class="muted">Pop a video, or a YouTube or Vimeo player, into a floating window.</p></li>
+      </ul>
+    </section>
+
+    <section id="fun-autoplay" data-for="fun" aria-labelledby="h-fun-autoplay">
+      <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Autoplay</p>
+      <h2 class="h1" id="h-fun-autoplay">It plays when it opens</h2>
+      <p>The main video or song on a page starts as soon as the page loads, including YouTube, Vimeo and Dailymotion players.</p>
+      <dl class="rows">
+        <dt class="label">Paused stays paused</dt><dd>Pause something and NODE leaves it paused.</dd>
+        <dt class="label">Per site</dt><dd>Set autoplay on, muted or off for each site.</dd>
+        <dt class="label">Ads</dt><dd>Ads and trackers are blocked with uBlock Origin's default lists.</dd>
+      </dl>
+    </section>
+
+    <section id="fun-loop" data-for="fun" aria-labelledby="h-fun-loop">
+      <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Loop</p>
+      <h2 class="h1" id="h-fun-loop">Loop the best part</h2>
+      <p>Pick a section of any video and it plays again and again until you stop it.</p>
+      <div class="loopbox" role="img" aria-label="A video timeline with a loop from 0:12 to 0:40 and the playhead moving inside it.">
+        <div class="loopmeta"><span>youtube.com · Live set</span><b>↻ 0:12–0:40</b></div>
+        <div class="track"><div class="sec"></div><div class="head"></div></div>
+        <div class="loopmeta"><span>0:00</span><span>1:02:14</span></div>
+      </div>
+      <ul class="menu" aria-label="Loop Section menu">
+        <li>Loop the Next 30 Seconds</li>
+        <li>Loop the Next Minute</li>
+        <li>Loop the Next 5 Minutes</li>
+        <li class="on">Start Loop Here · End Loop Here</li>
+        <li>Stop Looping</li>
+      </ul>
+      <p class="muted">Right-click a video, or use Capture → Loop Section. Click ↻ in the tab to stop.</p>
+    </section>
+
+    <section id="fun-keep" data-for="fun" aria-labelledby="h-fun-keep">
+      <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Keep</p>
+      <h2 class="h1" id="h-fun-keep">Keep your favourites</h2>
+      <p>Save what you love as you watch, and NODE keeps where you stopped in each video.</p>
+      <div class="vcards" aria-label="Video cards on a trail">
+        <div class="vcard"><span class="k">Video</span><span class="t">Live set, rooftop</span><span class="m">Saved at 4:12 of 1:02:14</span></div>
+        <div class="vcard"><span class="k">Video</span><span class="t">Making the beat</span><span class="m">Saved at 0:48 of 12:04</span></div>
+        <div class="vcard"><span class="k">Capture</span><span class="t">Album cover</span><span class="m">Shot · S</span></div>
+      </div>
+      <ul class="list" aria-label="Ways to keep">
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Media</span><p class="muted">Download the video or image in view as a file (streamed video such as YouTube can't be saved as one file).</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Shot</span><p class="muted">Press S to save a screenshot to a folder, with a link back to the page.</p></li>
+        <li><svg class="mark" aria-hidden="true"><use href="#m"/></svg><span class="label">Video cards</span><p class="muted">Videos you watch become cards on your trail, with the time you stopped.</p></li>
+      </ul>
+    </section>
+
+    <section id="fun-share" data-for="fun" aria-labelledby="h-fun-share">
+      <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Share</p>
+      <h2 class="h1" id="h-fun-share">Send the whole playlist</h2>
+      <p>Send your trail of videos and pages to a friend as one file, and they open it in NODE with your note on top.</p>
+      <ol class="list steps" aria-label="How sharing works in fun mode">
+        <li><span class="tele">01</span><span class="label">Watch</span><p class="muted">Videos and pages you spend time on land on your trail.</p></li>
+        <li><span class="tele">02</span><span class="label">Send</span><p class="muted">Share the trail as one file with a note.</p></li>
+        <li><span class="tele">03</span><span class="label">Replay</span><p class="muted">Your friend steps through what you found, in the order you found it.</p></li>
+      </ol>
+      <p class="muted">Screenshots and sign-in pages never go in a shared trail.</p>
+    </section>
+
+    <section id="faq" aria-labelledby="h-faq">
+      <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Questions</p>
+      <h2 class="h1" id="h-faq">Before you switch</h2>
+      <dl class="rows faq">
+        <dt class="label">Do Chrome extensions work?</dt><dd>No. NODE is built on Electron, which can't run them. Ads and trackers are blocked with uBlock Origin's default lists, built in.</dd>
+        <dt class="label">What does NODE send, and to whom?</dt><dd>Nothing goes to the maker of NODE: there is no account and no usage data. Searches go to the search sources you turn on, and page text goes to Grok only when you ask it something.</dd>
+        <dt class="label">Does the other person need NODE?</dt><dd>To open the trail as a canvas and replay it, yes. The file itself is plain Markdown, so anyone can read it in a text editor.</dd>
+        <dt class="label">Can I sign in to Google?</dt><dd>Yes. Google pages open in a separate window of a Chromium-based browser on your computer, because Google blocks sign-in inside Electron.</dd>
+        <dt class="label">Why does Windows show a warning?</dt><dd>The Windows build is not signed yet. Click More info, then Run anyway. The Mac app is signed by Apple.</dd>
+        <dt class="label">What happens to my trails if NODE stops?</dt><dd>They stay on your computer as plain Markdown files, and the code is MIT licensed, so your work stays readable without NODE.</dd>
+        <dt class="label">Is it free?</dt><dd>Yes. No account, no paid plan.</dd>
       </dl>
     </section>
 
     <section id="available" aria-labelledby="h-available">
       <p class="eyebrow"><svg class="mark" aria-hidden="true"><use href="#m"/></svg>Available today</p>
-      <h2 class="h1" id="h-available">NODE 0.9.9 is live</h2>
-      <p>Download it, use it for real research, and send fixes from your own coding agent.</p>
+      <h2 class="h1" id="h-available">NODE 0.10.0 is live</h2>
+      <p>Download it and send your first trail to someone you research with.</p>
       <ul class="downloads" id="downloads" aria-label="Downloads">
         <li class="dl-row" data-key="mac-arm64">
-          <div class="dl-name"><span class="label">macOS · Apple chip</span><span class="tele">NODE-0.9.9-mac-arm64.dmg · 132 MB</span></div>
+          <div class="dl-name"><span class="label">macOS · Apple chip</span><span class="tele">NODE-0.10.0-mac-arm64.dmg · 132 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-mac-arm64.dmg" aria-label="Download for macOS · Apple chip">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-mac-arm64.dmg" aria-label="Download for macOS · Apple chip">Download</a>
         </li>
         <li class="dl-row" data-key="mac-x64">
-          <div class="dl-name"><span class="label">macOS · Intel</span><span class="tele">NODE-0.9.9-mac-x64.dmg · 139 MB</span></div>
+          <div class="dl-name"><span class="label">macOS · Intel</span><span class="tele">NODE-0.10.0-mac-x64.dmg · 139 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-mac-x64.dmg" aria-label="Download for macOS · Intel">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-mac-x64.dmg" aria-label="Download for macOS · Intel">Download</a>
         </li>
         <li class="dl-row" data-key="win-x64">
-          <div class="dl-name"><span class="label">Windows</span><span class="tele">NODE-0.9.9-win-x64.exe · 122 MB</span></div>
+          <div class="dl-name"><span class="label">Windows</span><span class="tele">NODE-0.10.0-win-x64.exe · 122 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-win-x64.exe" aria-label="Download for Windows">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-win-x64.exe" aria-label="Download for Windows">Download</a>
         </li>
         <li class="dl-row" data-key="linux-appimage">
-          <div class="dl-name"><span class="label">Linux · AppImage</span><span class="tele">NODE-0.9.9-linux-x86_64.AppImage · 128 MB</span></div>
+          <div class="dl-name"><span class="label">Linux · AppImage</span><span class="tele">NODE-0.10.0-linux-x86_64.AppImage · 128 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-linux-x86_64.AppImage" aria-label="Download for Linux · AppImage">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-linux-x86_64.AppImage" aria-label="Download for Linux · AppImage">Download</a>
         </li>
         <li class="dl-row" data-key="linux-deb">
-          <div class="dl-name"><span class="label">Linux · Debian, Ubuntu</span><span class="tele">NODE-0.9.9-linux-amd64.deb · 101 MB</span></div>
+          <div class="dl-name"><span class="label">Linux · Debian, Ubuntu</span><span class="tele">NODE-0.10.0-linux-amd64.deb · 101 MB</span></div>
           <span class="tag" hidden>This computer</span>
-          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/NODE-0.9.9-linux-amd64.deb" aria-label="Download for Linux · Debian, Ubuntu">Download</a>
+          <a class="btn secondary sm" href="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/NODE-0.10.0-linux-amd64.deb" aria-label="Download for Linux · Debian, Ubuntu">Download</a>
         </li>
       </ul>
       <dl class="rows">
@@ -290,7 +516,7 @@ code{font:400 13px/20px var(--mono)}
         <dt class="label">First open on Linux</dt><dd>Make the AppImage executable with <code>chmod +x</code>, then open it.</dd>
       </dl>
       <dl class="rows">
-        <dt class="label">Version</dt><dd class="mono">0.9.9 · 28 Oct 2026</dd>
+        <dt class="label">Version</dt><dd class="mono">0.10.0 · 5 Nov 2026</dd>
         <dt class="label">Price</dt><dd class="mono">Free</dd>
                 <dt class="label">Updates</dt><dd class="mono">Automatic on Mac and Windows</dd>
         <dt class="label">Source</dt><dd class="mono"><a href="https://github.com/westernCasa/node_browser">westernCasa/node_browser</a></dd>
@@ -305,12 +531,12 @@ code{font:400 13px/20px var(--mono)}
 
 <script>
 (function(){
-  var B="https://github.com/westernCasa/node_browser/releases/download/v0.9.9/";
+  var B="https://github.com/westernCasa/node_browser/releases/download/v0.10.0/";
   var files={
-    "mac-arm64":{name:"Mac",detail:"Apple chip · .dmg",file:"NODE-0.9.9-mac-arm64.dmg",size:"132 MB"},
-    "mac-x64":{name:"Mac",detail:"Intel · .dmg",file:"NODE-0.9.9-mac-x64.dmg",size:"139 MB"},
-    "win-x64":{name:"Windows",detail:"64-bit · .exe",file:"NODE-0.9.9-win-x64.exe",size:"122 MB"},
-    "linux-appimage":{name:"Linux",detail:"x86_64 · .AppImage",file:"NODE-0.9.9-linux-x86_64.AppImage",size:"128 MB"}
+    "mac-arm64":{name:"Mac",detail:"Apple chip · .dmg",file:"NODE-0.10.0-mac-arm64.dmg",size:"132 MB"},
+    "mac-x64":{name:"Mac",detail:"Intel · .dmg",file:"NODE-0.10.0-mac-x64.dmg",size:"139 MB"},
+    "win-x64":{name:"Windows",detail:"64-bit · .exe",file:"NODE-0.10.0-win-x64.exe",size:"122 MB"},
+    "linux-appimage":{name:"Linux",detail:"x86_64 · .AppImage",file:"NODE-0.10.0-linux-x86_64.AppImage",size:"128 MB"}
   };
   var ua=navigator.userAgent||"", uad=navigator.userAgentData;
   var plat=(uad&&uad.platform)||navigator.platform||"";
@@ -358,8 +584,87 @@ code{font:400 13px/20px var(--mono)}
     }
   }
   else if(os==="mobile"){
-    document.getElementById("dl-file").textContent="NODE runs on Mac, Windows and Linux. Open this page on your computer.";
+    var mainBtn=document.getElementById("dl-main"), info=document.getElementById("dl-file");
+    info.textContent="NODE runs on Mac, Windows and Linux. Send this page to your computer.";
+    mainBtn.textContent="Send to my computer";
+    mainBtn.href="#";
+    mainBtn.removeAttribute("data-track");
+    mainBtn.addEventListener("click",function(e){
+      e.preventDefault();
+      var url="https://noderesearch.app/?ref=phone-send";
+      window.va("event",{name:"phone-send"});
+      if(navigator.share){navigator.share({title:"NODE Research Browser",text:"Download NODE on my computer",url:url}).catch(function(){});return}
+      var done=function(){info.textContent="Link copied. Paste it in a message or email to yourself."};
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(done,function(){info.textContent=url})}else{info.textContent=url}
+    });
   }
+  document.querySelectorAll(".dl-row a, #dl-main").forEach(function(a){a.addEventListener("click",function(){if(a.getAttribute("href")==="#")return;var n=(a.getAttribute("href")||"").split("/").pop();window.va("event",{name:"download",data:{file:n,from:a.id==="dl-main"?"hero":"list"}})})});
+  document.querySelectorAll("[data-track]").forEach(function(a){a.addEventListener("click",function(){window.va("event",{name:a.getAttribute("data-track")})})});
+})();
+</script>
+<script>
+/* Fun mode opens only from its link (noderesearch.app/fun). Log the visit. */
+(function(){
+  if(document.documentElement.getAttribute("data-mode")==="fun")window.va("event",{name:"fun-mode"});
+})();
+</script>
+<script>
+/* Dot field: fills the left column. A slow band of light sweeps across it;
+   with a mouse, dots near the pointer brighten and move aside. */
+(function(){
+  var cv=document.getElementById("dots"), side=document.querySelector(".side");
+  if(!cv||!side||!cv.getContext)return;
+  var ctx=cv.getContext("2d");
+  var reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var fine=matchMedia("(hover: hover) and (pointer: fine)").matches;
+  var GAP=18, R=1, REACH=110, PUSH=10, SWEEP=3600, REST=3400, BAND=70, GLOW=.6;
+  var dots=[], W=0, H=0, dpr=1, px=-1e4, py=-1e4, raf=0, seen=true, t0=performance.now();
+  var base=[42,42,45], hot=[161,161,166];
+  var themes={research:[[42,42,45],[161,161,166]],fun:[[48,36,72],[178,140,255]]};
+  window.nodeDots={theme:function(m){var t=themes[m]||themes.research;base=t[0];hot=t[1];if(reduce)frame(performance.now(),true)}};
+  if(document.documentElement.getAttribute("data-mode")==="fun"){base=themes.fun[0];hot=themes.fun[1]}
+  function layout(){
+    var wide=innerWidth>=900, b=side.getBoundingClientRect();
+    W=Math.ceil(b.right); H=wide?innerHeight:Math.ceil(b.height);
+    cv.style.top=wide?"0px":(b.top+scrollY)+"px";
+    dpr=Math.min(devicePixelRatio||1,2);
+    cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+"px"; cv.style.height=H+"px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    dots=[];
+    var ox=(W%GAP)/2+GAP/2, oy=(H%GAP)/2+GAP/2;
+    for(var y=oy;y<H;y+=GAP)for(var x=ox;x<W-GAP/2;x+=GAP)dots.push({x:x,y:y,dx:0,dy:0,t:0});
+    frame(performance.now(),true);
+  }
+  function frame(now,snap){
+    ctx.clearRect(0,0,W,H);
+    // Shimmer band position along the diagonal (x + y), or off the field while resting.
+    var span=W+H+BAND*4, ph=(now-t0)%(SWEEP+REST), band=-1e5;
+    if(!reduce&&ph<SWEEP){var e=ph/SWEEP;e=e<.5?2*e*e:1-Math.pow(-2*e+2,2)/2;band=e*span-BAND*2}
+    for(var i=0;i<dots.length;i++){
+      var d=dots[i], k=0, tx=0, ty=0;
+      if(fine&&!reduce){
+        var vx=d.x-px, vy=d.y-py, dist=Math.sqrt(vx*vx+vy*vy);
+        if(dist<REACH){k=1-dist/REACH;k=k*k;var f=PUSH*k/(dist||1);tx=vx*f;ty=vy*f}
+      }
+      if(snap){d.dx=tx;d.dy=ty;d.t=k}else{d.dx+=(tx-d.dx)*.18;d.dy+=(ty-d.dy)*.18;d.t+=(k-d.t)*.18}
+      var g=(d.x+d.y)-band, sh=GLOW*Math.exp(-(g*g)/(2*BAND*BAND));
+      var c=Math.max(d.t,sh), rr=R+d.t*.8+sh*.4;
+      ctx.fillStyle="rgb("+Math.round(base[0]+(hot[0]-base[0])*c)+","+Math.round(base[1]+(hot[1]-base[1])*c)+","+Math.round(base[2]+(hot[2]-base[2])*c)+")";
+      ctx.beginPath();ctx.arc(d.x+d.dx,d.y+d.dy,rr,0,6.2832);ctx.fill();
+    }
+  }
+  function tick(now){raf=0;if(!seen||document.hidden)return;frame(now,false);raf=requestAnimationFrame(tick)}
+  function start(){if(!raf&&!reduce&&seen&&!document.hidden)raf=requestAnimationFrame(tick)}
+  if(fine)addEventListener("pointermove",function(e){
+    var b=cv.getBoundingClientRect(); px=e.clientX-b.left; py=e.clientY-b.top;
+  },{passive:true});
+  document.addEventListener("pointerleave",function(){px=py=-1e4});
+  addEventListener("blur",function(){px=py=-1e4});
+  document.addEventListener("visibilitychange",start);
+  if("IntersectionObserver" in window)new IntersectionObserver(function(es){seen=es[0].isIntersecting;start()}).observe(cv);
+  var to;addEventListener("resize",function(){clearTimeout(to);to=setTimeout(layout,120)});
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);
+  layout();start();
 })();
 </script>
 </body>

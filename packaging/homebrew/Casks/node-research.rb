@@ -1,14 +1,14 @@
 cask "node-research" do
   arch arm: "arm64", intel: "x64"
 
-  version "0.9.9"
-  sha256 arm:   "4b3726a82a2e8e5102e4c3f3eb537b7d7412ea53fe089b5a040befb985810078",
-         intel: "a310d0323a3bdad3b8e0aeaf56a55e0eef0866e42e210258c161beee41e5a480"
+  version "0.10.0"
+  sha256 arm:   "19530d19995647d4cdc6e9b934030ff229d57dc279657d5a9e63bbac00304fa5",
+         intel: "bbd9a7d6e6d4fd9369c3a07e6ff241c596e1ad98f73dfbad41f9bd0717eb43f1"
 
   url "https://github.com/westernCasa/node_browser/releases/download/v#{version}/NODE-#{version}-mac-#{arch}.dmg",
       verified: "github.com/westernCasa/node_browser/"
   name "NODE Research Browser"
-  desc "Research browser that suggests what to read next from the page you are on"
+  desc "Research browser that maps what you read and shares it with others"
   homepage "https://noderesearch.app/"
 
   livecheck do
