@@ -16,7 +16,7 @@ const again = (text) => {
 {
   const files = [path.join(__dirname, "..", "docs", "sourdough-starters.trail.md"), ...fs.readdirSync(path.join(__dirname, "fixtures")).filter((f) => f.endsWith(".trail.md")).map((f) => path.join(__dirname, "fixtures", f))];
   for (const f of files) {
-    const text = fs.readFileSync(f, "utf8");
+    const text = fs.readFileSync(f, "utf8").replace(/\r\n/g, "\n"); // Windows checks the files out with CRLF
     const out = again(text);
     assert.strictEqual(out.trimEnd(), text.trimEnd(), `${path.basename(f)} changed on the way through`);
     assert.strictEqual(again(out), out, `${path.basename(f)}: a second round trip changed it`);
