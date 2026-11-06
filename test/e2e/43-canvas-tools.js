@@ -122,12 +122,18 @@ const server = http.createServer((req, res) => {
   const a2 = t.cards.find((c) => c.id === A.id);
   check("dragging the group's name moves the group with its cards", t.groups[0].y === g.y + 120 && a2.y === A.y + 120 && a2.pinned, JSON.stringify({ g: t.groups[0].y, a: a2.y }));
 
-  // Move a card: it is pinned.
+  // Move a card: it is pinned. Bring it into view first: on the Windows
+  // runner the canvas is narrower and C starts past its right edge.
+  const keepView = await ui.evaluate(() => ({ ...trailCanvas.v }));
+  await ui.evaluate((c) => trailCanvas.setView({ x: Math.round(trailCanvas.vp.clientWidth / 2 - (c.x + c.w / 2)), y: trailCanvas.v.y, z: 1 }), C);
+  await sleep(300);
   const cc = await centre(C.id);
   await dragTo(cc, { x: cc.x + 60, y: cc.y + 300 });
   t = await snap();
   const c2 = t.cards.find((c) => c.id === C.id);
   check("dragging a card moves it and pins it", c2.y === C.y + 300 && c2.x === C.x + 60 && c2.pinned, JSON.stringify(c2 && [c2.x, c2.y]));
+  await ui.evaluate((v) => trailCanvas.setView(v), keepView);
+  await sleep(300);
 
   // Question and Note.
   // An empty spot on the canvas, with room for a card.
@@ -220,6 +226,13 @@ const server = http.createServer((req, res) => {
   await ui.keyboard.press("Escape");
   await sleep(300);
   check("Esc clears the search and the dimming", await ui.evaluate(() => !document.querySelector("#canvas .cv-card.dim") && document.querySelector("#canvas .cv-drop").hidden));
+  // Every address a page starts loading, from the main process: the results
+  // tab's address is checked there, the same on every system.
+  await app.evaluate(({ app: eapp, webContents }) => {
+    globalThis.__navs = [];
+    for (const wc of webContents.getAllWebContents()) wc.on("did-start-navigation", (d) => globalThis.__navs.push(d.url || ""));
+    eapp.on("web-contents-created", (_e, wc) => wc.on("did-start-navigation", (d) => globalThis.__navs.push(d.url || "")));
+  });
   const before6 = (await snap()).cards.length;
   await ui.click("#canvas .cv-search input");
   await ui.keyboard.type("rye bread history");
@@ -230,7 +243,7 @@ const server = http.createServer((req, res) => {
   check("Enter: a search card titled \"Search: rye bread history\"", sc?.title === "Search: rye bread history" && t.cards.length === before6 + 1, JSON.stringify(sc));
   // The tab's address, as asked for: on CI the real page may answer with a
   // redirect or a check page, so compare the query, not the whole address.
-  const resultTab = await ui.evaluate(() => tabs.map((x) => x.url).find((u) => /search\.brave\.com/.test(u)) || "");
+  const resultTab = (await app.evaluate(() => globalThis.__navs)).find((u) => /search\.brave\.com/.test(u)) || "";
   check("and the results open in a tab", /rye(%20|\+| )bread(%20|\+| )history/.test(resultTab) && !(await ui.evaluate(() => canvasShown)), resultTab);
   await ui.evaluate(() => window.scout.canvasShow());
   await sleep(1200);
