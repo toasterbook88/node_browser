@@ -139,7 +139,7 @@ const session = (id, extra) => ({
   assert.ok(!JSON.stringify(store.get("s1")).includes("accounts.google.com") && !files.read("s1/events.jsonl").includes("accounts.google.com"), "sign-in pages are dropped");
   ok("migration: other pages stay timeline-only with no recorded time; sign-in pages are dropped");
   const kinds = snap.cards.map((c) => c.kind).sort();
-  assert.deepStrictEqual(kinds, ["capture", "note", "page", "page", "page", "page", "page", "question", "report"]);
+  assert.deepStrictEqual(kinds, ["media", "note", "page", "page", "page", "page", "page", "question", "report"], "a screenshot becomes a media card (B114)");
   const q = snap.cards.find((c) => c.kind === "question");
   assert.strictEqual(q.replies[0].text, "Not sure yet");
   const eco = snap.cards.find((c) => c.url === "https://ncbi.nlm.nih.gov/ecology");
@@ -245,6 +245,45 @@ const session = (id, extra) => ({
   const body = (t) => t.split("\n## Timeline")[0].replace(/^id: .*$/m, "");
   assert.strictEqual(body(out), body(text));
   ok("an opened file writes back out with the same cards, groups and links");
+}
+
+// ---- Media cards (B114) ----
+{
+  const TF = require("../core/trail-file");
+  const store = new TrailStore(memoryStorage(), { now });
+  const id = store.current().trail.id;
+  store.visit(id, "https://example.com/bread", { title: "Bread" });
+  const page = store.placePage(id, "https://example.com/bread", { title: "Bread" });
+  const img = store.mediaCard(id, { lib: "L1", media: "image", title: "Crumb", src: "https://img.example.com/crumb.jpg?utm_source=x", url: "https://example.com/bread" });
+  assert.ok(img && img.kind === "media" && img.media === "image" && img.lib === "L1" && img.w === 300);
+  assert.ok(store.snapshot(id).lines.some((l) => l.from === page.id && l.to === img.id && l.kind === "auto" && l.label === "captured from"));
+  assert.strictEqual(store.mediaCard(id, { lib: "L1", media: "image" }).id, img.id, "the same Library item is one card");
+  assert.strictEqual(store.mediaCard(id, { lib: "L9", media: "pdf" }), null);
+  assert.strictEqual(store.mediaCard(id, { media: "image" }), null, "needs a Library item or an address");
+  assert.ok(store.events(id).some((e) => e.type === "captured" && e.card === img.id));
+  ok("a Library image becomes a media card next to its page, with a captured-from line");
+  store.removeCard(id, img.id);
+  assert.ok(store.mediaCard(id, { lib: "L1", media: "image" }) && !store.card(id, img.id).removed, "putting it on again brings it back");
+  // Screenshots and media saved to the Library come in as media cards.
+  const shot = store.captureCard(id, { libraryId: "L2", kind: "shot", name: "shot-1.png", url: "https://example.com/bread", title: "Bread", at: now() });
+  const clip = store.captureCard(id, { libraryId: "L3", kind: "media", name: "media-1.webm", url: "https://example.com/bread", src: "https://cdn.example.com/clip.webm", at: now() });
+  assert.ok(shot.kind === "media" && shot.media === "screenshot" && clip.media === "video" && clip.src === "https://cdn.example.com/clip.webm" && clip.title === "Video from example.com");
+  store.removeCard(id, shot.id);
+  store.captureCard(id, { libraryId: "L2", kind: "shot", name: "shot-1.png", url: "https://example.com/bread", title: "Bread", at: now() });
+  assert.ok(store.card(id, shot.id).removed, "a removed screenshot stays removed when the session is saved again");
+  ok("screenshots and saved media come in as media cards; a removed one stays removed");
+  store.mediaCard(id, { lib: "L2", media: "screenshot" }); // Put on canvas again
+  store.mediaCard(id, { lib: "L4", media: "audio", title: "Mic test" });
+  const md = TF.toTrailMd(store.snapshot(id), { by: "Sven" });
+  assert.ok(/^### !\[Crumb\]\(https:\/\/img\.example\.com\/crumb\.jpg\)$/m.test(md), "an image links to where it came from, without tracking codes");
+  assert.ok(/^### Screenshot: Bread$/m.test(md) && /^### \[Video from example\.com\]\(https:\/\/cdn\.example\.com\/clip\.webm\) · video clip$/m.test(md) && /^### Audio: Mic test$/m.test(md));
+  assert.ok(!/L1|L2|L3|L4|shot-1\.png|scoutlib/.test(md), "Library ids and files never go in");
+  assert.strictEqual((md.match(/^The file stayed on the sender's computer\.$/gm) || []).length, 2, "screenshot and recording say so");
+  const back = TF.parseTrailMd(md);
+  const m = back.cards.filter((c) => c.kind === "media").map((c) => [c.media, c.src || "", c.url || ""].join(" "));
+  assert.deepStrictEqual(m.sort(), ["audio  ", "image https://img.example.com/crumb.jpg https://example.com/bread", "screenshot  https://example.com/bread", "video https://cdn.example.com/clip.webm https://example.com/bread"].sort());
+  assert.strictEqual(TF.toTrailMd(back, { by: "Sven", at: back.trail.at }), md);
+  ok("in a trail file, media cards link to where they came from; nothing from the computer goes in; the file reads back the same");
 }
 
 // ---- 200 cards stay fast ----

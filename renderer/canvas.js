@@ -111,7 +111,21 @@
   ];
   const LABEL_TEXT = { supports: "Supports", contradicts: "Contradicts", answers: "Answers", raises: "Raises" };
   const looksLikeAddress = (q) => /^[a-z][a-z0-9+.-]*:\/\//i.test(q) || /^(localhost|[\w-]+(\.[\w-]+)+)(:\d+)?(\/\S*)?$/i.test(q);
-  const KIND_LABEL = { page: "Page", video: "Video", capture: "Capture", report: "Report", question: "Question", note: "Note", voice: "Voice", search: "Search" };
+  const KIND_LABEL = { page: "Page", video: "Video", capture: "Capture", report: "Report", question: "Question", note: "Note", voice: "Voice", search: "Search", media: "Media" };
+  const MEDIA_LABEL = { image: "Image", screenshot: "Screenshot", video: "Video", audio: "Audio" };
+  // B114: what a card shows as media, and from where: the Library file on
+  // this computer, or (in an opened file) the address it came from. Older
+  // capture cards of a screenshot show it too.
+  function mediaOf(c) {
+    if (c.kind === "media") return { media: c.media, src: c.lib ? `scoutlib://item/${c.lib}` : c.src || "" };
+    if (c.kind === "capture" && c.libraryId && c.captureKind === "shot") return { media: "screenshot", src: `scoutlib://item/${c.libraryId}` };
+    return null;
+  }
+  const clock = (t) => {
+    if (!Number.isFinite(t)) return "0:00";
+    const s = Math.max(0, Math.round(t));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  };
 
   const helpers = { Z_MIN, Z_MAX, DOT_GAP, clampZ, zoomAt, worldBounds, fitView, centreOn, lineEnds, minimap, gridFor, hostOf };
   if (typeof module === "object" && module.exports) {
@@ -379,6 +393,8 @@
         return { x: (e.clientX - r.left - this.v.x) / this.v.z, y: (e.clientY - r.top - this.v.y) / this.v.z };
       };
       vp.addEventListener("pointerdown", (e) => {
+        // Media controls on a card (B114) take their own clicks.
+        if (e.target.closest?.(".cv-media-ctl, video[controls]")) return;
         if (e.button !== 0 || e.target.closest(".cv-edit, .cv-menu")) return;
         this.closeMenu();
         const card = e.target.closest?.(".cv-card");
@@ -493,24 +509,43 @@
         if (name && !this.readonly) this.openRename(name.closest(".cv-group").dataset.id);
       });
       // Put on canvas by dragging a timeline row here (B104).
+      // B114: a Library item dragged from the Library, or image, video and
+      // audio files from Finder or Explorer, become media cards where dropped.
+      const mediaFiles = (dt) => [...(dt?.items || [])].some((i) => i.kind === "file" && /^(image|video|audio)\//.test(i.type));
       vp.addEventListener("dragover", (e) => {
-        if (![...e.dataTransfer.types].includes("text/node-url")) return;
+        const types = [...e.dataTransfer.types];
+        if (!types.includes("text/node-url") && !types.includes("text/node-lib") && !mediaFiles(e.dataTransfer)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
       });
       vp.addEventListener("drop", (e) => {
         const url = e.dataTransfer.getData("text/node-url");
-        if (!url) return;
+        const lib = e.dataTransfer.getData("text/node-lib");
+        const files = [...(e.dataTransfer.files || [])].filter((f) => /^(image|video|audio)\//.test(f.type));
+        if (!url && !lib && !files.length) return;
         e.preventDefault();
+        e.stopPropagation();
         if (this.readonly) return this.sayReadonly();
         const r = vp.getBoundingClientRect();
         const wx = (e.clientX - r.left - this.v.x) / this.v.z, wy = (e.clientY - r.top - this.v.y) / this.v.z;
-        this.hooks.put?.({ url, x: wx - 130, y: wy - 100 });
+        if (url) this.hooks.put?.({ url, x: wx - 130, y: wy - 100 });
+        else if (lib) this.hooks.libraryPlace?.(lib, { x: wx - 150, y: wy - 120 });
+        else this.hooks.libraryImport?.(files, { x: wx - 150, y: wy - 120 });
       });
       vp.addEventListener("dblclick", (e) => {
-        const card = e.target.closest?.(".cv-card");
-        if (card && !this.replay) this.openCard(card.dataset.id);
+        // The viewport holds the pointer while a card is pressed, so the
+        // double-click arrives on it: find the card under the pointer.
+        const under = document.elementFromPoint(e.clientX, e.clientY) || e.target;
+        const card = under.closest?.(".cv-card");
+        if (!card || this.replay || under.closest?.(".cv-media-ctl, video[controls]")) return;
+        const c = this.data?.cards.find((k) => k.id === card.dataset.id);
+        if (c && mediaOf(c)) return this.openViewer(c);
+        this.openCard(card.dataset.id);
       });
+      // One video or audio card plays at a time.
+      this.el.addEventListener("play", (e) => {
+        for (const m of this.el.querySelectorAll("video, audio")) if (m !== e.target && !m.paused) m.pause();
+      }, true);
       vp.addEventListener("keydown", (e) => {
         const step = e.shiftKey ? 240 : 60;
         const moves = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
@@ -583,6 +618,7 @@
     }
 
     render() {
+      this.mediaUsed = new Set();
       const d = this.data || { cards: [], groups: [], lines: [] };
       const byId = new Map(d.cards.map((c) => [c.id, c]));
       this.paintEmpty();
@@ -658,6 +694,8 @@
       const cFrag = document.createDocumentFragment();
       for (const c of d.cards) cFrag.append(this.cardEl(c));
       this.cardsEl.replaceChildren(cFrag);
+      // Media parts of cards no longer shown are let go.
+      for (const k of this.mediaEls?.keys() || []) if (!this.mediaUsed.has(k)) this.mediaEls.delete(k);
       this.paintMiniRects();
       if (this.replay) this.paintReplay();
     }
@@ -791,7 +829,8 @@
       if (pv) el.classList.add("open");
 
       const head = h("div", "cv-card-head");
-      const label = [KIND_LABEL[c.kind] || "Card"];
+      const label = [c.kind === "media" ? MEDIA_LABEL[c.media] || "Media" : KIND_LABEL[c.kind] || "Card"];
+      if (c.kind === "media" && c.url) label.push(hostOf(c.url));
       if (c.kind === "page" || c.kind === "video") label.push(hostOf(c.url));
       if (c.kind === "capture" && c.source) label.push(c.source);
       if (c.kind === "question") {
@@ -803,7 +842,12 @@
       if (pv) head.append(h("span", "cv-tab-mark", "Tab"));
       el.append(head);
 
-      if (pv?.thumb) {
+      const md = mediaOf(c);
+      if (md) {
+        el.classList.add("media", `media-${md.media}`);
+        el.append(this.mediaBox(c, md));
+      }
+      if (pv?.thumb && !md) {
         const img = h("img", "cv-shot");
         img.alt = "";
         img.decoding = "async";
@@ -814,7 +858,7 @@
       const title =
         c.kind === "note" ? c.text : c.kind === "capture" && c.quote ? `“${c.quote}”` : c.title || c.text || (c.url ? hostOf(c.url) : KIND_LABEL[c.kind]);
       el.append(h("div", "cv-card-title", title || ""));
-      const sub = this.cardSub(c);
+      const sub = md ? "" : this.cardSub(c);
       if (sub && !pv?.thumb) el.append(h("div", "cv-card-sub", sub));
       const foot = this.cardFoot(c);
       if (foot) el.append(h("div", "cv-card-foot", foot));
@@ -1065,6 +1109,156 @@
       box.addEventListener("blur", () => finish(true));
       this.el.append(box);
       box.focus();
+    }
+
+    // ---- media cards (B114) ----
+    // The media part of a card. Kept between redraws (by card and address),
+    // so a video or audio card that is playing keeps playing.
+    mediaBox(c, md) {
+      this.mediaEls = this.mediaEls || new Map();
+      const key = `${c.id}|${md.src}`;
+      this.mediaUsed?.add(key);
+      const have = this.mediaEls.get(key);
+      if (have) return have;
+      const box = h("div", "cv-media");
+      const missing = (text) => {
+        box.replaceChildren(h("div", "cv-media-missing", text));
+        box.classList.add("missing");
+      };
+      if (!md.src) missing(md.media === "screenshot" ? "The screenshot stayed with the sender." : "The file stayed with the sender.");
+      else if (md.media === "image" || md.media === "screenshot") {
+        const img = h("img", "cv-media-img");
+        img.alt = c.title || "";
+        img.decoding = "async";
+        img.loading = "lazy";
+        img.draggable = false;
+        img.addEventListener("error", () => missing(c.lib || c.libraryId ? "Not in the Library any more." : "Could not load the image."));
+        img.src = md.src;
+        box.append(img);
+      } else if (md.media === "video") {
+        const v = h("video", "cv-media-video");
+        v.preload = "metadata";
+        v.playsInline = true;
+        v.src = md.src;
+        v.addEventListener("error", () => missing(c.lib ? "Not in the Library any more." : "Could not load the video."));
+        const play = h("button", "cv-media-play cv-media-ctl", "Play");
+        play.type = "button";
+        play.setAttribute("aria-label", `Play ${c.title || "video"}`);
+        play.addEventListener("click", (e) => {
+          e.stopPropagation();
+          v.controls = true;
+          play.hidden = true;
+          v.play().catch(() => {});
+        });
+        v.addEventListener("pointerdown", (e) => v.controls && e.stopPropagation());
+        box.append(v, play);
+      } else if (md.media === "audio") {
+        const a = h("audio", "");
+        a.preload = "metadata";
+        a.src = md.src;
+        const ctl = h("div", "cv-audio cv-media-ctl");
+        const btn = h("button", "cv-audio-btn", "Play");
+        btn.type = "button";
+        btn.setAttribute("aria-label", `Play ${c.title || "audio"}`);
+        const bar = h("div", "cv-audio-bar");
+        const fill = h("span", "");
+        bar.append(fill);
+        const time = h("span", "cv-audio-time", "0:00");
+        const paint = () => {
+          fill.style.transform = `scaleX(${a.duration ? a.currentTime / a.duration : 0})`;
+          time.textContent = a.duration ? `${clock(a.currentTime)} / ${clock(a.duration)}` : clock(a.currentTime);
+          btn.textContent = a.paused ? "Play" : "Pause";
+          btn.setAttribute("aria-label", `${a.paused ? "Play" : "Pause"} ${c.title || "audio"}`);
+        };
+        for (const ev of ["loadedmetadata", "timeupdate", "play", "pause", "ended"]) a.addEventListener(ev, paint);
+        a.addEventListener("error", () => missing(c.lib ? "Not in the Library any more." : "Could not load the audio."));
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (a.paused) a.play().catch(() => {});
+          else a.pause();
+        });
+        bar.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          const r = bar.getBoundingClientRect();
+          if (a.duration) a.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * a.duration;
+        });
+        ctl.append(btn, bar, time);
+        ctl.addEventListener("pointerdown", (e) => e.stopPropagation());
+        box.append(a, ctl);
+      }
+      this.mediaEls.set(key, box);
+      return box;
+    }
+    // Every video and audio card stops (leaving the canvas, opening the viewer).
+    stopMedia() {
+      for (const m of this.el.querySelectorAll("video, audio")) if (!m.paused) m.pause();
+    }
+    // The viewer: the media large over the canvas. Esc, ✕ or a click outside
+    // closes it.
+    openViewer(c) {
+      const md = mediaOf(c);
+      if (!md) return;
+      this.closeViewer();
+      this.stopMedia();
+      const back = h("div", "cv-viewer");
+      back.setAttribute("role", "dialog");
+      back.setAttribute("aria-modal", "true");
+      back.setAttribute("aria-label", c.title || MEDIA_LABEL[md.media]);
+      const panel = h("div", "cv-viewer-panel");
+      const top = h("div", "cv-viewer-top");
+      top.append(h("span", "cv-card-kind", [MEDIA_LABEL[md.media], c.url ? hostOf(c.url) : ""].filter(Boolean).join(" · ")));
+      const x = h("button", "cv-viewer-close", "✕");
+      x.type = "button";
+      x.setAttribute("aria-label", "Close");
+      x.addEventListener("click", () => this.closeViewer());
+      top.append(x);
+      let body;
+      if (!md.src) body = h("div", "cv-media-missing", "The file stayed with the sender.");
+      else if (md.media === "video") {
+        body = h("video", "cv-viewer-media");
+        body.controls = true;
+        body.autoplay = true;
+        body.src = md.src;
+      } else if (md.media === "audio") {
+        body = h("audio", "cv-viewer-audio");
+        body.controls = true;
+        body.autoplay = true;
+        body.src = md.src;
+      } else {
+        body = h("img", "cv-viewer-media");
+        body.alt = c.title || "";
+        body.src = md.src;
+      }
+      const foot = h("div", "cv-viewer-foot");
+      foot.append(h("span", "cv-viewer-title", c.title || ""));
+      if (c.url) {
+        const go = h("button", "cv-viewer-link", "Open the page it came from");
+        go.type = "button";
+        go.addEventListener("click", () => {
+          this.closeViewer();
+          this.hooks.open?.({ ...c, kind: "page" }, null);
+        });
+        foot.append(go);
+      }
+      panel.append(top, body, foot);
+      back.append(panel);
+      back.addEventListener("pointerdown", (e) => e.target === back && this.closeViewer());
+      back.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          this.closeViewer();
+        }
+      });
+      this.viewer = back;
+      this.el.append(back);
+      x.focus();
+    }
+    closeViewer() {
+      if (!this.viewer) return;
+      for (const m of this.viewer.querySelectorAll("video, audio")) m.pause();
+      this.viewer.remove();
+      this.viewer = null;
+      this.vp.focus?.();
     }
 
     cardSub(c) {

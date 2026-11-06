@@ -1611,3 +1611,35 @@ body.sb-replaying .sb-timeline { display: none; }
   #canvas .cv-corner, #canvas .cv-key { bottom: 72px; }
   #canvas .cv-multibar { bottom: 124px; }
 }
+
+/* Media cards (B114): images and screenshots show; video and audio play on
+   the card; double-click opens the viewer. Tokens only. */
+#canvas .cv-card.media { gap: 8px; }
+#canvas .cv-media { position: relative; flex: 1 1 auto; min-height: 0; margin: 0 -12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#canvas .cv-card.media-audio .cv-media { flex: none; margin: 0; border: 0; background: none; }
+#canvas .cv-media-img, #canvas .cv-media-video { display: block; width: 100%; height: 100%; object-fit: contain; }
+#canvas .cv-card.media-screenshot .cv-media-img { object-fit: cover; object-position: top center; }
+#canvas .cv-media-missing { padding: 12px; font-size: 13px; line-height: 18px; color: var(--ink-muted); text-align: center; }
+#canvas .cv-media-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 32px; padding: 0 14px; background: var(--surface-raised); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); font: 600 12px var(--sans); letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; }
+#canvas .cv-media-play[hidden] { display: none; }
+#canvas .cv-media-play:focus-visible, #canvas .cv-audio-btn:focus-visible, #canvas .cv-viewer-close:focus-visible, #canvas .cv-viewer-link:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+#canvas .cv-audio { display: flex; align-items: center; gap: 8px; width: 100%; }
+#canvas .cv-audio-btn { flex: none; height: 28px; padding: 0 10px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); font: 600 11px var(--sans); letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
+#canvas .cv-audio-bar { flex: 1 1 auto; height: 4px; background: var(--line); border-radius: var(--radius-sm); overflow: hidden; cursor: pointer; }
+#canvas .cv-audio-bar span { display: block; height: 100%; width: 100%; background: var(--signal); transform: scaleX(0); transform-origin: left center; }
+#canvas .cv-audio-time { flex: none; font: 11px var(--mono); color: var(--ink-muted); }
+#canvas .cv-viewer { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 32px; background: color-mix(in srgb, var(--surface) 86%, transparent); animation: cv-viewer-in var(--motion-base) var(--ease-enter); }
+#canvas .cv-viewer-panel { display: flex; flex-direction: column; gap: 10px; max-width: 100%; max-height: 100%; padding: 12px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+#canvas .cv-viewer-top, #canvas .cv-viewer-foot { display: flex; align-items: center; gap: 12px; }
+#canvas .cv-viewer-top .cv-card-kind { flex: 1 1 auto; }
+#canvas .cv-viewer-close { width: 32px; height: 32px; background: none; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
+#canvas .cv-viewer-media { display: block; width: min(1200px, calc(100vw - 420px)); height: auto; max-height: calc(100vh - 180px); object-fit: contain; background: var(--surface); }
+#canvas .cv-viewer-audio { width: min(520px, calc(100vw - 420px)); }
+#canvas .cv-viewer-title { flex: 1 1 auto; font-size: 15px; color: var(--ink); }
+#canvas .cv-viewer-link { background: none; border: 0; padding: 0; color: var(--ink); text-decoration: underline; cursor: pointer; font: 14px var(--sans); }
+@keyframes cv-viewer-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #canvas .cv-viewer { animation: none; } }
+/* Dragging a Library item out (B114): the Menu fades and lets the drop
+   through to the canvas. */
+#menu-overlay.drag-out { pointer-events: none; }
+#menu-overlay.drag-out .menu-scrim, #menu-overlay.drag-out .menu-panel { opacity: 0; transition: opacity var(--motion-fast) var(--ease-exit); }

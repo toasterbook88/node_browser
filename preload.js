@@ -151,6 +151,10 @@ contextBridge.exposeInMainWorld("scout", {
   savePage: (id) => ipcRenderer.invoke("library:save", id),
   grabMedia: (id, url) => ipcRenderer.invoke("library:grab", id, url),
   libraryList: () => ipcRenderer.invoke("library:list"),
+  // B114: Library media on the canvas.
+  libraryPlace: (id, at) => ipcRenderer.invoke("library:place", id, at),
+  libraryImport: (files, at) => ipcRenderer.invoke("library:import", [...files].map((f) => webUtils.getPathForFile(f)).filter(Boolean), at),
+  libraryImportPaths: (paths, at) => ipcRenderer.invoke("library:import", paths, at),
   removeLibraryItem: (id) => ipcRenderer.invoke("library:remove", id),
   openLibraryFolder: () => ipcRenderer.invoke("library:open-folder"),
   revealFile: (file) => ipcRenderer.invoke("library:reveal", file),

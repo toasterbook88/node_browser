@@ -1,6 +1,6 @@
 # 26 · Trail file format (node-trail v2)
 
-Status: draft, Nov 5 2026. Replaces the v1 format in doc 19 for canvas trails. Sharing starts as a file; a link comes later.
+Status: draft, Nov 5 2026 (media cards added the same day, B114). Replaces the v1 format in doc 19 for canvas trails. Sharing starts as a file; a link comes later.
 
 ## Goals
 
@@ -41,6 +41,11 @@ Status: draft, Nov 5 2026. Replaces the v1 format in doc 19 for canvas trails. S
 | question | `### ? Question` | `Status: open · N replies`, then the latest reply |
 | note | `### Note` | text, then `— author · date` |
 | voice | `### Voice note · 0:22` | transcript |
+| media, image from the web | `### ![Title](image address)` | `From [site](page address)` |
+| media, video or audio from the web | `### [Title](media address) · video clip` (or `· audio`) | `From [site](page address)` |
+| media, screenshot or a file from the computer | `### Screenshot: Title` (or `Image:`, `Video:`, `Audio:`) | `From [site](page address)` if any, then `The file stayed on the sender's computer.` |
+
+Media cards (B114, added 2026-11-05) keep `node-trail: 2`: the layout comment adds `media:image`, `media:screenshot`, `media:video` or `media:audio`. The file never carries the media itself or the sender's Library id. Media saved from the web links to where it came from (`src`), without tracking codes, so the reader's NODE shows a large preview from there (the image, or a video or audio player). A screenshot links only to its page. Readers that don't know media cards see a normal Markdown image or link.
 
 ## Links
 
@@ -61,7 +66,7 @@ Suggested lines are not saved. They are NODE's guesses, not the sender's work.
 - Always in the file: cards, groups and links.
 - On by default: timeline, with timeline-only pages.
 - Off by default: open tabs.
-- Never in the file: screenshots (they stay on the sender's computer), sign-in and payment pages, private tabs, other trails.
+- Never in the file: screenshots and other media files (they stay on the sender's computer; media from the web is linked, see Cards), sign-in and payment pages, private tabs, other trails.
 
 ## Opening a file
 

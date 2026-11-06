@@ -514,7 +514,14 @@ function merge(base, incoming, answers = {}) {
 // payment pages, screenshots (only the capture's text and source go in).
 
 const FORMAT_V2 = 2;
-const SIZE_V2 = { page: [260, 200], video: [260, 220], capture: [260, 210], report: [260, 240], question: [260, 170], note: [260, 150], voice: [260, 170], search: [260, 140] };
+const SIZE_V2 = { page: [260, 200], video: [260, 220], capture: [260, 210], report: [260, 240], question: [260, 170], note: [260, 150], voice: [260, 170], search: [260, 140], media: [300, 240] };
+// Media cards (B114). The file never carries the media itself: it links to
+// where the media came from on the web (src), so the reader's NODE can show
+// a large preview from there. Screenshots, recordings and files added from
+// the computer have no address on the web; their card says the file stayed
+// with the sender.
+const MEDIA_WORD = { image: "Image", screenshot: "Screenshot", video: "Video", audio: "Audio" };
+const MEDIA_TAG = { video: "video clip", audio: "audio" };
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 const two = (n) => String(n).padStart(2, "0");
 const hhmm = (t) => {
@@ -552,6 +559,10 @@ function cardHeading(c) {
       return `### ? ${mdText(c.title)}`;
     case "voice":
       return `### Voice note${c.durationText ? ` · ${c.durationText}` : ""}`;
+    case "media":
+      if (c.src && c.media === "image") return `### ![${mdText(c.title || "Image")}](${c.src})`;
+      if (c.src && MEDIA_TAG[c.media]) return `### [${mdText(c.title || MEDIA_WORD[c.media])}](${c.src}) · ${MEDIA_TAG[c.media]}`;
+      return `### ${MEDIA_WORD[c.media] || "Image"}: ${mdText(c.title || "untitled")}`;
     default:
       return "### Note";
   }
@@ -607,20 +618,40 @@ function cardBody(c) {
     case "voice":
       if (c.text) out.push(oneLine(c.text));
       break;
+    case "media":
+      if (c.url) out.push(`From [${mdText(hostOf(c.url) || c.url)}](${c.url})`);
+      if (!c.src) out.push("The file stayed on the sender's computer.");
+      break;
   }
   return out;
 }
+function hostOf(u) {
+  try {
+    return new URL(u).hostname.replace(/^www\./, "");
+  } catch (_) {
+    return "";
+  }
+}
 
 function layoutComment(c) {
-  return `<!-- id:${c.id} type:${c.kind} at:${Math.round(c.x)},${Math.round(c.y)} size:${Math.round(c.w)}x${Math.round(c.h)} -->`;
+  return `<!-- id:${c.id} type:${c.kind}${c.kind === "media" ? ` media:${c.media}` : ""} at:${Math.round(c.x)},${Math.round(c.y)} size:${Math.round(c.w)}x${Math.round(c.h)} -->`;
 }
 const inGroup = (c, g) => {
   const x = c.x + c.w / 2, y = c.y + c.h / 2;
   return x >= g.x && x <= g.x + g.w && y >= g.y && y <= g.y + g.h;
 };
 const sendable = (c) => !c.removed && !(c.url && isSensitiveUrl(c.url)) && !(["page", "video", "search"].includes(c.kind) && !cleanUrl(c.url));
-// Addresses leave without private tokens or tracking codes (cleanUrl).
-const forFile = (c) => (c.url ? { ...c, url: cleanUrl(c.url) || undefined } : c);
+// Addresses leave without private tokens or tracking codes (cleanUrl). A
+// media card's file and Library id stay behind.
+const forFile = (c) => {
+  const o = c.url ? { ...c, url: cleanUrl(c.url) || undefined } : { ...c };
+  if (o.kind === "media") {
+    delete o.lib;
+    if (o.src) o.src = cleanUrl(o.src) || undefined;
+    if (o.media === "screenshot") delete o.src;
+  }
+  return o;
+};
 
 function linkLabel(l) {
   if (l.kind === "nav") return "opened from";
@@ -770,7 +801,7 @@ function parseTrailMd(text) {
         if (/^<!-- id:/.test(meta)) {
           const at = pair(attr(meta, "at"), ",");
           const size = pair(attr(meta, "size"), "x");
-          Object.assign(card, { id: attr(meta, "id"), kind: attr(meta, "type"), x: at?.[0], y: at?.[1], w: size?.[0], h: size?.[1] });
+          Object.assign(card, { id: attr(meta, "id"), kind: attr(meta, "type"), media: attr(meta, "media"), x: at?.[0], y: at?.[1], w: size?.[0], h: size?.[1] });
           i++;
         } else card.id = `fc${++n}`;
         group?.cards.push(card.id);
@@ -812,6 +843,7 @@ function parseTrailMd(text) {
 }
 
 function guessKind(head) {
+  if (/^!\[.*\]\(.*\)/.test(head) || /^(Image|Screenshot|Video|Audio):\s/.test(head) || /^\[.*\]\(.*\)\s*·\s*(video clip|audio)$/.test(head)) return "media";
   if (/^\?\s/.test(head)) return "question";
   if (/^>\s?/.test(head)) return "capture";
   if (/^Report:/i.test(head)) return "report";
@@ -886,6 +918,22 @@ function readCard(raw) {
       c.durationText = (raw.head.match(/·\s*(.+)$/) || [])[1] || "";
       if (b.length) c.text = b.join(" ");
       break;
+    case "media": {
+      const img = raw.head.match(/^!\[(.*)\]\((\S*)\)/);
+      const word = raw.head.match(/^(Image|Screenshot|Video|Audio):\s*(.*)$/);
+      const tag = raw.head.match(/·\s*(video clip|audio)$/);
+      if (img) Object.assign(c, { media: "image", title: img[1], src: img[2] });
+      else if (link && tag) Object.assign(c, { media: tag[1] === "audio" ? "audio" : "video", src: c.url });
+      else if (word) Object.assign(c, { media: word[1].toLowerCase(), title: word[2] });
+      if (MEDIA_WORD[raw.media]) c.media = raw.media;
+      if (!MEDIA_WORD[c.media]) c.media = "image";
+      if (c.src && !/^https?:\/\//i.test(c.src)) delete c.src;
+      delete c.url;
+      const from = b.find((l) => /^From \[/.test(l));
+      const fu = from && from.match(/\]\((\S+)\)/);
+      if (fu && /^https?:\/\//i.test(fu[1])) c.url = fu[1];
+      break;
+    }
   }
   return c;
 }

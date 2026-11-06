@@ -1245,7 +1245,7 @@ async function renderShelf() {
     }
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.innerHTML = `<strong>${escapeHtml(item.note || item.name)}</strong><p>${escapeHtml(item.folder)}${item.session?.name ? ` · trail: ${escapeHtml(item.session.name)}` : ""}</p>`;
+    meta.innerHTML = `<strong>${escapeHtml(item.title || item.note || item.name)}</strong><p>${escapeHtml(item.folder)}${item.session?.name ? ` · trail: ${escapeHtml(item.session.name)}` : ""}</p>`;
     if (item.sourceUrl) {
       const go = document.createElement("button");
       go.className = "link";
@@ -1267,6 +1267,34 @@ async function renderShelf() {
       await api?.removeLibraryItem?.(item.id);
       openLibrary();
     });
+    // B114: Put on canvas, or drag the item onto the canvas.
+    if (item.media) {
+      const put = document.createElement("button");
+      put.className = "link";
+      put.textContent = "Put on canvas";
+      put.addEventListener("click", async () => {
+        await closeLibrary();
+        if (!canvasShown) await api.canvasShow?.();
+        await trailCanvas?.hooks.libraryPlace(item.id);
+      });
+      meta.append(put);
+      card.draggable = true;
+      card.title = "Drag onto the canvas";
+      card.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/node-lib", item.id);
+        e.dataTransfer.effectAllowed = "copy";
+        // The Menu fades so the canvas under it takes the drop.
+        if (!canvasShown) api.canvasShow?.();
+        requestAnimationFrame(() => document.getElementById("menu-overlay")?.classList.add("drag-out"));
+      });
+      card.addEventListener("dragend", () => {
+        const over = document.getElementById("menu-overlay");
+        if (over?.classList.contains("drag-out")) {
+          over.classList.remove("drag-out");
+          closeLibrary();
+        }
+      });
+    }
     meta.append(show, remove);
     card.append(meta);
     libraryList.append(card);
@@ -3876,6 +3904,17 @@ async function openCanvas({ focus = false, select = "" } = {}) {
     ask: (q) => askAboutTrail(q),
     // B110: Replay and Share, top right.
     replay: () => startTrailReplay(0),
+    // B114: Library media on the canvas.
+    libraryPlace: async (lib, at) => {
+      const out = await api.libraryPlace?.(lib, at);
+      if (out?.result) trailCanvas.select(out.result.id);
+      await refreshCanvasData();
+    },
+    libraryImport: async (files, at) => {
+      const out = await api.libraryImport?.(files, at);
+      if (out?.placed?.length) await refreshCanvasData();
+      if (out?.skipped?.length) trailCanvas.say(`Not added: ${out.skipped.join(", ")}. NODE takes images, video and audio.`);
+    },
     share: () => openShareSheet(),
     replayChanged: (state) => paintReplayList(state),
   });
@@ -3941,6 +3980,8 @@ async function refreshCanvasData() {
 }
 function closeCanvas() {
   trailCanvas?.endReplay();
+  trailCanvas?.closeViewer();
+  trailCanvas?.stopMedia();
   canvasSeq++;
   canvasShown = false;
   canvasEl.hidden = true;
