@@ -145,6 +145,21 @@ const tabCount = (ui) => ui.evaluate(() => tabs.length);
   check("the canvas opens at the trail's saved position, zoom and selection", cv.layer === "translate(-120px, 60px) scale(0.6)" && cv.zoom === "60" && cv.selected === "q1", cv.layer);
   check("line key with four line types, minimap with every card, dot grid in the canvas-dot token", cv.key === 4 && cv.mini === cv.cards && /rgb\(35, 35, 38\)/.test(cv.dot), cv.dot);
 
+  // B113: depth. Panning 8 px moves the dots 10 px (1.25 times), at 100%
+  // where the dots are 24 px apart; with reduced motion they move 8 px.
+  const gridX = async (x) => {
+    await ui.evaluate((x) => trailCanvas.setView({ x, y: 0, z: 1 }, { save: false }), x);
+    return ui.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector("#canvas .cv-grid")).transform).m41);
+  };
+  const keep = await ui.evaluate(() => ({ ...trailCanvas.v }));
+  const g0 = await gridX(0), g8 = await gridX(8);
+  check("the dot grid moves faster than the cards when panning (depth)", g8 - g0 === 10, `${g0} → ${g8}`);
+  await ui.emulateMedia({ reducedMotion: "reduce" });
+  const r0 = await gridX(0), r8 = await gridX(8);
+  check("with reduced motion the dots move with the cards", r8 - r0 === 8, `${r0} → ${r8}`);
+  await ui.emulateMedia({ reducedMotion: null });
+  await ui.evaluate((v) => trailCanvas.setView(v, { save: false }), keep);
+
   const box = await ui.locator("#canvas .cv-vp").boundingBox();
   await ui.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await ui.mouse.wheel(40, 100);

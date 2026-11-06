@@ -15,6 +15,10 @@
   const Z_MIN = 0.2;
   const Z_MAX = 2.5;
   const DOT_GAP = 24; // dot grid spacing at 100%
+  // Depth: the dot grid moves 1.25 times as far as the cards when the canvas
+  // pans, so it reads as a layer in front of them. With reduced motion it
+  // moves with the cards.
+  const DOT_DEPTH = 1.25;
   const MINI = { w: 180, h: 116 };
 
   const clampZ = (z) => Math.max(Z_MIN, Math.min(Z_MAX, Number(z) || 1));
@@ -76,10 +80,10 @@
 
   // Dot grid: spacing on screen and the offset that keeps dots on world points.
   // Below 50% every other dot is left out so the grid does not turn to noise.
-  function gridFor(v) {
+  function gridFor(v, depth = DOT_DEPTH) {
     const gap = DOT_GAP * v.z * (v.z < 0.5 ? 2 : 1);
     const mod = (n) => ((n % gap) + gap) % gap;
-    return { gap, ox: mod(v.x), oy: mod(v.y) };
+    return { gap, ox: mod(v.x * depth), oy: mod(v.y * depth) };
   }
 
   function hostOf(url) {
@@ -1155,7 +1159,7 @@
       clearTimeout(this.settleTimer);
       this.settleTimer = setTimeout(() => this.layer.classList.remove("moving"), 160);
       this.layer.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.z})`;
-      const g = gridFor(v);
+      const g = gridFor(v, reducedMotion() ? 1 : DOT_DEPTH);
       if (g.gap !== this.gridGap) {
         this.gridGap = g.gap;
         this.grid.style.backgroundSize = `${g.gap}px ${g.gap}px`;
